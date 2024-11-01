@@ -1,0 +1,25 @@
+[package]
+name = "diesel-tpc-c"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["sqlite"]
+mysql = ["diesel/mysql"]
+postgres = ["diesel/postgres"]
+sqlite = ["diesel/sqlite"]
+
+[dependencies]
+chrono = { version="0.4", default-features=false, features=["clock", "std"] }
+diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2"] }
+diesel_migrations = { version = "2" }
+dotenv = "0.15"
+env_logger = { version = "0.8", default-features=false }
+libsqlite3-sys = { version = "0.25", features= ["bundled"] }
+
+[profile.release]
+opt-level = 2
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+

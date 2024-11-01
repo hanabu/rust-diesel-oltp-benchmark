@@ -1,0 +1,7 @@
+*~
+*.bak
+*.sav
+*.sqlite
+*.zip
+.env
+/target
