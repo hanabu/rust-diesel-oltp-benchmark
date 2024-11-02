@@ -2,6 +2,12 @@
 name = "diesel-tpc-c"
 version = "0.1.0"
 edition = "2021"
+publish = false
+
+[workspace]
+members = [
+    "tpcc_models"
+]
 
 [features]
 default = ["sqlite"]
@@ -10,6 +16,10 @@ postgres = ["diesel/postgres"]
 sqlite = ["diesel/sqlite"]
 
 [dependencies]
+diesel.workspace = true
+tpcc_models = { path = "tpcc_models" }
+
+[workspace.dependencies]
 chrono = { version="0.4", default-features=false, features=["clock", "std"] }
 diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2"] }
 diesel_migrations = { version = "2" }

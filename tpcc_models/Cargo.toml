@@ -1,0 +1,12 @@
+[package]
+name = "tpcc_models"
+version = "0.1.0"
+edition = "2021"
+workspace = ".."
+publish = false
+
+[dependencies]
+chrono.workspace = true
+diesel.workspace = true
+diesel_migrations.workspace = true
+rand.workspace = true
