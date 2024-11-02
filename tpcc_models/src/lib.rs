@@ -1,4 +1,4 @@
-use crate::schema;
+mod schema;
 use diesel::prelude::*;
 pub type Connection = diesel::sqlite::SqliteConnection;
 

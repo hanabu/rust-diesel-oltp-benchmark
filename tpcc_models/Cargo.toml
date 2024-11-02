@@ -9,4 +9,5 @@ publish = false
 chrono.workspace = true
 diesel.workspace = true
 diesel_migrations.workspace = true
+libsqlite3-sys.workspace = true
 rand.workspace = true
