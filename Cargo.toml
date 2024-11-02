@@ -13,9 +13,10 @@ sqlite = ["diesel/sqlite"]
 chrono = { version="0.4", default-features=false, features=["clock", "std"] }
 diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2"] }
 diesel_migrations = { version = "2" }
-dotenv = "0.15"
+dotenvy = "0.15"
 env_logger = { version = "0.8", default-features=false }
 libsqlite3-sys = { version = "0.25", features= ["bundled"] }
+rand = "0.8"
 
 [profile.release]
 opt-level = 2
