@@ -1,20 +1,5 @@
-mod schema;
+use crate::{schema, Connection};
 use diesel::prelude::*;
-pub type Connection = diesel::sqlite::SqliteConnection;
-
-pub fn connect(db_url: &str) -> ConnectionResult<Connection> {
-    use diesel::prelude::Connection;
-
-    let mut conn = diesel::SqliteConnection::establish(db_url)?;
-
-    // SQLite on NFS can not use WAL,
-    // set journal_mode as default DELETE mode
-    diesel::sql_query("PRAGMA journal_mode = DELETE")
-        .execute(&mut conn)
-        .map_err(|e| ConnectionError::CouldntSetupConfiguration(e))?;
-
-    Ok(conn)
-}
 
 /// Run database migration, prepare initial records
 pub fn prepare(scale_factor: i32, conn: &mut Connection) -> diesel::migration::Result<()> {
