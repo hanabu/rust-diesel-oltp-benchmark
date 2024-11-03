@@ -13,7 +13,7 @@ sqlite = ["dep:libsqlite3-sys", "diesel/sqlite"]
 
 [dependencies]
 chrono.workspace = true
-diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2"] }
+diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2", "returning_clauses_for_sqlite_3_35"] }
 diesel_migrations = { version = "2" }
 libsqlite3-sys = { version = "0.25", features= ["bundled"], optional=true }
 rand.workspace = true

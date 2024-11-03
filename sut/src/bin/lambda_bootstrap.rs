@@ -5,7 +5,7 @@
 ///
 use sut::*;
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<(), lambda_http::Error> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     lambda_http::run(app().await).await?;

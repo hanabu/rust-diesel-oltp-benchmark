@@ -26,5 +26,6 @@ if_types = { path="../if_types" }
 lambda_http = { version="0.13", default-features=false, features=["apigw_http"] }
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tpcc_models = { path="../tpcc_models" }

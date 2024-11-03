@@ -1,8 +1,8 @@
-use crate::{schema, Connection};
+use crate::{schema, DbConnection};
 use diesel::prelude::*;
 
 /// Run database migration, prepare initial records
-pub fn prepare(scale_factor: i32, conn: &mut Connection) -> diesel::migration::Result<()> {
+pub fn prepare(scale_factor: i32, conn: &mut DbConnection) -> diesel::migration::Result<()> {
     use diesel_migrations::MigrationHarness;
     const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
         diesel_migrations::embed_migrations!("migrations");
@@ -45,7 +45,7 @@ pub struct Item {
 
 impl Item {
     // Prepare initial Items
-    pub fn prepare(num: i32, conn: &mut Connection) -> QueryResult<Vec<Self>> {
+    pub fn prepare(num: i32, conn: &mut DbConnection) -> QueryResult<Vec<Self>> {
         use schema::items;
         let cur_id = items::table
             .select(diesel::dsl::max(items::i_id))
@@ -88,8 +88,27 @@ pub struct Warehouse {
 }
 
 impl Warehouse {
+    /// Get Warehouse by it's id
+    pub fn find(id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
+        schema::warehouses::table.find(id).first(conn)
+    }
+
+    /// Get District
+    pub fn find_district(
+        &self,
+        district_id: i32,
+        conn: &mut DbConnection,
+    ) -> QueryResult<District> {
+        District::find(self.w_id, district_id, conn)
+    }
+
+    /// Get tax rate of the warehouse
+    pub fn tax(&self) -> f64 {
+        self.w_tax
+    }
+
     /// Prepare Warehose
-    pub fn prepare(conn: &mut Connection) -> QueryResult<Self> {
+    pub fn prepare(conn: &mut DbConnection) -> QueryResult<Self> {
         use schema::warehouses;
         let cur_id = warehouses::table
             .select(diesel::dsl::max(warehouses::w_id))
@@ -117,13 +136,17 @@ impl Warehouse {
 
     /// Insert stock in warehouse
     /// In TPC-C standard, each warehouse has 100_000 stocks.
-    pub fn prepare_stocks(&self, num: i32, conn: &mut Connection) -> QueryResult<Vec<Stock>> {
+    pub fn prepare_stocks(&self, num: i32, conn: &mut DbConnection) -> QueryResult<Vec<Stock>> {
         Stock::prepare(self.w_id, num, conn)
     }
 
     /// Insert district in warehouse
     /// In TPC-C standard, each warehouse has 10 districts.
-    pub fn prepare_districts(&self, num: i32, conn: &mut Connection) -> QueryResult<Vec<District>> {
+    pub fn prepare_districts(
+        &self,
+        num: i32,
+        conn: &mut DbConnection,
+    ) -> QueryResult<Vec<District>> {
         District::prepare(self.w_id, num, conn)
     }
 }
@@ -152,9 +175,42 @@ pub struct Stock {
 }
 
 impl Stock {
+    /// PK
+    fn id(&self) -> (i32, i32) {
+        (self.s_w_id, self.s_i_id)
+    }
+
+    /// TPC-C standard spec. 2.4.2.2
+    /// Allocate stock by New Order transaction
+    fn allocate(&self, quantity: i32, order_by_warehouse_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
+        use schema::stocks;
+        let new_qty = if self.s_quantity > quantity + 10 {
+            self.s_quantity - quantity
+        } else {
+            self.s_quantity - quantity + 91
+        };
+
+        let remote_inc = if self.s_w_id==order_by_warehouse_id{
+            0 // home order
+        }else{
+            1 // remote order
+        };
+
+        let updated_stock = diesel::update(stocks::table.find(self.id()))
+            .set((
+                stocks::s_quantity.eq(new_qty),
+                stocks::s_ytd.eq(stocks::s_ytd + quantity),
+                stocks::s_order_cnt.eq(stocks::s_order_cnt + 1),
+                stocks::s_remote_cnt.eq(stocks::s_remote_cnt + remote_inc),
+            ))
+            .get_result(conn)?;
+
+        Ok(updated_stock)
+    }
+
     /// Insert new stocks
     ///   public API: call warehouse.insert_stocks() instead.
-    fn prepare(warehouse_id: i32, num: i32, conn: &mut Connection) -> QueryResult<Vec<Self>> {
+    fn prepare(warehouse_id: i32, num: i32, conn: &mut DbConnection) -> QueryResult<Vec<Self>> {
         use schema::stocks;
         let cur_id = stocks::table
             .filter(stocks::s_w_id.eq(warehouse_id))
@@ -194,6 +250,24 @@ impl Stock {
     }
 }
 
+/// Interface type
+pub struct StockedItem {
+    item: Item,
+    stock: Stock,
+}
+
+impl StockedItem {
+    pub fn find(warehouse_id: i32, item_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
+        use schema::{items, stocks};
+        let item = items::table.find(item_id).first::<Item>(conn)?;
+        let stock = stocks::table
+            .find((warehouse_id, item_id))
+            .first::<Stock>(conn)?;
+
+        Ok(Self { item, stock })
+    }
+}
+
 /// District: belongs to Warehouse
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::districts)]
@@ -212,9 +286,74 @@ pub struct District {
 }
 
 impl District {
+    /// Get district by it's id
+    ///   public API: call warehouse.find_districts() instead.
+    fn find(warehouse_id: i32, district_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
+        schema::districts::table
+            .find((warehouse_id, district_id))
+            .first(conn)
+    }
+
+    /// PK
+    fn id(&self) -> (i32, i32) {
+        (self.d_w_id, self.d_id)
+    }
+
+    /// Get tax rate of the district
+    pub fn tax(&self) -> f64 {
+        self.d_tax
+    }
+
+    /// Find customer
+    pub fn find_customer(
+        &self,
+        customer_id: i32,
+        conn: &mut DbConnection,
+    ) -> QueryResult<Customer> {
+        Customer::find(self.d_w_id, self.d_id, customer_id, conn)
+    }
+
+    /// Add new order
+    /// TPC-C standard spec. 2.4.2
+    pub fn insert_order(
+        &mut self,
+        customer: &Customer,
+        items: &[(StockedItem, i32)], // (item, quantity)
+        conn: &mut DbConnection,
+    ) -> QueryResult<Order> {
+        use diesel::Connection;
+
+        conn.transaction(|conn| {
+            // Run transaction
+            let order_id = self.issue_order_id(conn)?;
+            let order = Order::insert(self.d_w_id, self.d_id, order_id, customer, items, conn)?;
+
+            // allocate stock
+            for (item, qty) in items {
+                item.stock.allocate(*qty, self.d_w_id, conn)?;
+            }
+            Ok(order)
+        })
+    }
+
+    /// Issue new order_id
+    fn issue_order_id(&mut self, conn: &mut DbConnection) -> QueryResult<i32> {
+        use schema::districts;
+
+        // Increment d_next_o_id
+        let next_id = diesel::update(districts::table.find(self.id()))
+            .set(districts::d_next_o_id.eq(districts::d_next_o_id + 1))
+            .returning(districts::d_next_o_id)
+            .get_result(conn)?;
+
+        self.d_next_o_id = next_id;
+
+        Ok(next_id - 1)
+    }
+
     /// Insert new districts
-    ///   public API: call warehouse.prepare_districts() instead.
-    fn prepare(warehouse_id: i32, num: i32, conn: &mut Connection) -> QueryResult<Vec<Self>> {
+    ///   public API: call warehouse.prepare_district() instead.
+    fn prepare(warehouse_id: i32, num: i32, conn: &mut DbConnection) -> QueryResult<Vec<Self>> {
         use schema::districts;
         let cur_id = districts::table
             .filter(districts::d_w_id.eq(warehouse_id))
@@ -249,13 +388,17 @@ impl District {
 
     /// Insert customers in district
     /// In TPC-C standard, each district has 3_000 customers.
-    pub fn prepare_customers(&self, num: i32, conn: &mut Connection) -> QueryResult<Vec<Customer>> {
+    pub fn prepare_customers(
+        &self,
+        num: i32,
+        conn: &mut DbConnection,
+    ) -> QueryResult<Vec<Customer>> {
         Customer::prepare(self.d_w_id, self.d_id, num, conn)
     }
 
     /// Insert orders in district
     /// In TPC-C standard, each district has 3_000 orders.
-    pub fn prepare_orders(&self, num: i32, conn: &mut Connection) -> QueryResult<Vec<Order>> {
+    pub fn prepare_orders(&self, num: i32, conn: &mut DbConnection) -> QueryResult<Vec<Order>> {
         Order::prepare(self.d_w_id, self.d_id, num, conn)
     }
 }
@@ -287,13 +430,31 @@ pub struct Customer {
 }
 
 impl Customer {
+    /// Get customer by it's id
+    ///   public API: call district.find_customer() instead.
+    fn find(
+        warehouse_id: i32,
+        district_id: i32,
+        customer_id: i32,
+        conn: &mut DbConnection,
+    ) -> QueryResult<Self> {
+        schema::customers::table
+            .find((warehouse_id, district_id, customer_id))
+            .first(conn)
+    }
+
+    // PK
+    // fn id(&self) -> (i32, i32, i32) {
+    //     (self.c_w_id, self.c_d_id, self.c_id)
+    // }
+
     /// Insert new customers
     ///   public API: call district.prepare_customers() instead.
     fn prepare(
         warehouse_id: i32,
         district_id: i32,
         num: i32,
-        conn: &mut Connection,
+        conn: &mut DbConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::{customers, histories};
         let cur_c_id = customers::table
@@ -406,12 +567,62 @@ pub struct Order {
 
 impl Order {
     /// Insert new orders
+    ///   public API: call district.insert_order() instead.
+    fn insert(
+        warehouse_id: i32,
+        district_id: i32,
+        order_id: i32,
+        customer: &Customer,
+        items: &[(StockedItem, i32)],
+        conn: &mut DbConnection,
+    ) -> QueryResult<Self> {
+        use schema::{new_orders, order_lines, orders};
+
+        // Order
+        let insert_order = Self {
+            o_id: order_id,
+            o_d_id: district_id,
+            o_w_id: warehouse_id,
+            o_c_id: customer.c_id,
+            o_entry_d: chrono::Utc::now().naive_utc(),
+            o_carrier_id: None,
+            o_ol_cnt: items.len() as i32,
+            o_all_local: items.iter().all(|(s, _qty)| s.stock.s_w_id == warehouse_id) as i32,
+        };
+        diesel::insert_into(orders::table)
+            .values(&insert_order)
+            .execute(conn)?;
+
+        // NewOrder
+        let insert_new_order = NewOrder {
+            no_o_id: order_id,
+            no_d_id: district_id,
+            no_w_id: warehouse_id,
+        };
+        diesel::insert_into(new_orders::table)
+            .values(&insert_new_order)
+            .execute(conn)?;
+
+        // OrderLines
+        let insert_order_lines = items
+            .iter()
+            .enumerate()
+            .map(|(idx, (item, qty))| OrderLine::new(customer, item, order_id, idx as i32, *qty))
+            .collect::<Vec<_>>();
+        diesel::insert_into(order_lines::table)
+            .values(insert_order_lines)
+            .execute(conn)?;
+
+        Ok(insert_order)
+    }
+
+    /// Insert new orders
     ///   public API: call district.prepare_orders() instead.
     fn prepare(
         warehouse_id: i32,
         district_id: i32,
         num: i32,
-        conn: &mut Connection,
+        conn: &mut DbConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::{customers, new_orders, order_lines, orders};
         let cur_id = orders::table
@@ -519,7 +730,7 @@ impl Order {
 
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::order_lines)]
-pub struct OrderLine {
+struct OrderLine {
     ol_o_id: i32,
     ol_d_id: i32,
     ol_w_id: i32,
@@ -532,9 +743,48 @@ pub struct OrderLine {
     ol_dist_info: String,
 }
 
+impl OrderLine {
+    /// NewOrder transaction
+    ///
+    fn new(
+        customer: &Customer,
+        item: &StockedItem,
+        order_id: i32,
+        index: i32,
+        quantity: i32,
+    ) -> Self {
+        let dist_info = match customer.c_d_id {
+            1 => item.stock.s_dist_01.as_str(),
+            2 => item.stock.s_dist_02.as_str(),
+            3 => item.stock.s_dist_03.as_str(),
+            4 => item.stock.s_dist_04.as_str(),
+            5 => item.stock.s_dist_05.as_str(),
+            6 => item.stock.s_dist_06.as_str(),
+            7 => item.stock.s_dist_07.as_str(),
+            8 => item.stock.s_dist_08.as_str(),
+            9 => item.stock.s_dist_09.as_str(),
+            10 => item.stock.s_dist_10.as_str(),
+            _ => "Invalid District ID",
+        };
+
+        Self {
+            ol_o_id: order_id,
+            ol_d_id: customer.c_d_id,
+            ol_w_id: customer.c_w_id,
+            ol_number: index,
+            ol_i_id: item.item.i_id,
+            ol_supply_w_id: item.stock.s_w_id,
+            ol_delivery_id: None,
+            ol_quantity: quantity,
+            ol_amount: quantity as f64 * item.item.i_price,
+            ol_dist_info: dist_info.to_string(),
+        }
+    }
+}
+
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::new_orders)]
-pub struct NewOrder {
+struct NewOrder {
     no_o_id: i32,
     no_d_id: i32,
     no_w_id: i32,

@@ -1,6 +1,6 @@
 mod new_order;
 
-pub type Error = Box<(dyn std::error::Error + Send + Sync + 'static)>;
+// pub type Error = Box<(dyn std::error::Error + Send + Sync + 'static)>;
 
 /// Initialize & build Axum route
 pub async fn app() -> axum::Router {
@@ -20,7 +20,32 @@ pub async fn app() -> axum::Router {
 
 async fn status(
     axum::extract::State(pool): axum::extract::State<tpcc_models::Pool>,
-) -> axum::response::Json<serde_json::Value> {
-    let _conn = pool.get().unwrap();
-    axum::response::Json(serde_json::json!({}))
+) -> Result<axum::response::Json<serde_json::Value>, Error> {
+    let _conn = pool.get()?;
+    Ok(axum::response::Json(serde_json::json!({})))
+}
+
+/// Error type in request handler
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("database pool error")]
+    DbPoolError(#[from] tpcc_models::PoolError),
+    #[error("database query error")]
+    DbQueryError(#[from] tpcc_models::QueryError),
+    #[error("async runtime error")]
+    TokioJoinError(#[from] tokio::task::JoinError),
+}
+
+impl axum::response::IntoResponse for Error {
+    fn into_response(self) -> axum::response::Response {
+        use axum::http::StatusCode;
+        use tpcc_models::QueryError;
+        match self {
+            Error::DbQueryError(e) => match e {
+                QueryError::NotFound => StatusCode::NOT_FOUND.into_response(),
+                _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            },
+            _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
 }
