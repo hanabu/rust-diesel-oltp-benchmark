@@ -5,9 +5,15 @@ edition = "2021"
 workspace = ".."
 publish = false
 
+[features]
+default = ["sqlite"]
+mysql = ["diesel/mysql"]
+postgres = ["diesel/postgres"]
+sqlite = ["dep:libsqlite3-sys", "diesel/sqlite"]
+
 [dependencies]
 chrono.workspace = true
-diesel.workspace = true
-diesel_migrations.workspace = true
-libsqlite3-sys.workspace = true
+diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2"] }
+diesel_migrations = { version = "2" }
+libsqlite3-sys = { version = "0.25", features= ["bundled"], optional=true }
 rand.workspace = true

@@ -1,3 +1,3 @@
-# TPC-C database benchmark written in Rust Diesel ORM
+# TPC-C like database benchmark written in Rust Diesel ORM
 
 todo!()

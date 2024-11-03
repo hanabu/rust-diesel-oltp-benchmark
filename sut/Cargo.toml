@@ -1,0 +1,29 @@
+[package]
+name = "sut"
+version = "0.1.0"
+edition = "2021"
+publish = false
+default-run = "sut"
+workspace = ".."
+
+[lib]
+path = "src/lib.rs"
+
+# SUT server binary running on localhost
+[[bin]]
+name = "sut"
+path = "src/bin/sut.rs"
+
+# SUT server binary for AWS Lambda
+[[bin]]
+name = "bootstrap"
+path = "src/bin/lambda_bootstrap.rs"
+
+[dependencies]
+axum = { version="0.7" }
+env_logger.workspace = true
+lambda_http = { version="0.13", default-features=false, features=["apigw_http"] }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tpcc_models = { path="../tpcc_models" }
