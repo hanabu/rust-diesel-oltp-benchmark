@@ -6,6 +6,7 @@ publish = false
 
 [workspace]
 members = [
+    "if_types",
     "sut",
     "tpcc_models"
 ]

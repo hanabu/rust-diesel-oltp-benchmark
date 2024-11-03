@@ -15,13 +15,14 @@ name = "sut"
 path = "src/bin/sut.rs"
 
 # SUT server binary for AWS Lambda
-[[bin]]
-name = "bootstrap"
-path = "src/bin/lambda_bootstrap.rs"
+#[[bin]]
+#name = "bootstrap"
+#path = "src/bin/lambda_bootstrap.rs"
 
 [dependencies]
 axum = { version="0.7" }
 env_logger.workspace = true
+if_types = { path="../if_types" }
 lambda_http = { version="0.13", default-features=false, features=["apigw_http"] }
 serde.workspace = true
 serde_json.workspace = true
