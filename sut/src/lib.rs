@@ -23,6 +23,10 @@ pub async fn app() -> axum::Router {
             "/customers/:warehouse_id/:district_id/:customer_id/orders",
             get(order_status::order_status),
         )
+        .route(
+            "/customers/:warehouse_id/:district_id/:customer_id",
+            get(customer::customer_by_id),
+        )
         .route("/customers", get(customer::customer_by_lastname))
         .with_state(pool)
 }

@@ -28,7 +28,7 @@ pub(crate) async fn new_order(
             })
             .collect::<Result<Vec<_>, crate::Error>>()?;
 
-        let _order = district.insert_order(&customer, &order_items, &mut conn)?;
+        let (order, lines) = district.insert_order(&customer, &order_items, &mut conn)?;
 
         todo!()
     })

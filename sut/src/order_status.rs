@@ -13,11 +13,8 @@ pub(crate) async fn order_status(
         // Search customer by ID
         let customer =
             tpcc_models::Customer::find(warehouse_id, district_id, customer_id, &mut conn)?;
-        println!("customer found : {:?}", customer);
 
-        let ret = customer.last_order(&mut conn);
-        println!("order : {:?}", ret);
-        let (db_order, db_lines) = ret?;
+        let (db_order, db_lines) = customer.last_order(&mut conn)?;
 
         // Re-share to response JSON type
         let lines = db_lines
