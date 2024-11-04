@@ -130,7 +130,7 @@ CREATE TABLE order_lines (
   ol_number      INTEGER          NOT NULL,
   ol_i_id        INTEGER          NOT NULL,
   ol_supply_w_id INTEGER          NOT NULL,
-  ol_delivery_id DATETIME,
+  ol_delivery_d  DATETIME,
   ol_quantity    INTEGER          NOT NULL,
   ol_amount      DOUBLE PRECISION NOT NULL,
   ol_dist_info   TEXT             NOT NULL,

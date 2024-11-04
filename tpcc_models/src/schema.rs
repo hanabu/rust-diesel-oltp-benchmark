@@ -67,7 +67,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    new_orders (no_d_id, no_w_id) {
+    new_orders (no_o_id, no_d_id, no_w_id) {
         no_o_id -> Integer,
         no_d_id -> Integer,
         no_w_id -> Integer,
@@ -82,7 +82,7 @@ diesel::table! {
         ol_number -> Integer,
         ol_i_id -> Integer,
         ol_supply_w_id -> Integer,
-        ol_delivery_id -> Nullable<Timestamp>,
+        ol_delivery_d -> Nullable<Timestamp>,
         ol_quantity -> Integer,
         ol_amount -> Double,
         ol_dist_info -> Text,
