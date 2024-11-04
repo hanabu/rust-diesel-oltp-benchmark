@@ -353,8 +353,9 @@ impl District {
         use schema::districts;
 
         // Increment d_next_o_id
-        let row = districts::table.filter(districts::d_w_id.eq(self.d_w_id))
-        .filter(districts::d_id.eq(self.d_id));
+        let row = districts::table
+            .filter(districts::d_w_id.eq(self.d_w_id))
+            .filter(districts::d_id.eq(self.d_id));
         let next_id = diesel::update(row)
             .set(districts::d_next_o_id.eq(districts::d_next_o_id + 1))
             .returning(districts::d_next_o_id)
@@ -473,6 +474,72 @@ impl Customer {
             .filter(customers::c_last.eq(lastname))
             .order(customers::c_first)
             .load::<Self>(conn)
+    }
+
+    /// Payment Transaction
+    /// TPC-C standard spec. 2.5
+    pub fn pay(
+        &self,
+        district_at: &District,
+        amount: f64,
+        conn: &mut DbConnection,
+    ) -> QueryResult<(Self, History, District, Warehouse)> {
+        use diesel::Connection;
+        use schema::{customers, districts, warehouses};
+
+        conn.transaction(move |conn| {
+            // Increment warehouse ytd
+            let warehouse = diesel::update(warehouses::table.find(district_at.d_w_id))
+                .set(warehouses::w_ytd.eq(warehouses::w_ytd + amount))
+                .get_result::<Warehouse>(conn)?;
+            // Increment district ytd
+            let row = districts::table
+                .filter(districts::d_w_id.eq(district_at.d_w_id))
+                .filter(districts::d_id.eq(district_at.d_id));
+            let district = diesel::update(row)
+                .set(districts::d_ytd.eq(districts::d_ytd + amount))
+                .get_result::<District>(conn)?;
+
+            // Update customer column
+            let row = customers::table
+                .filter(customers::c_w_id.eq(self.c_w_id))
+                .filter(customers::c_d_id.eq(self.c_d_id))
+                .filter(customers::c_id.eq(self.c_id));
+            let updated_customer = if self.c_credit == "BC" {
+                // Update c_data field
+                let new_c_data = format!(
+                    "{:04}{:04}{:04}{:04}{:04}{:04.2}{}",
+                    self.c_id,
+                    self.c_d_id,
+                    self.c_w_id,
+                    district.d_w_id,
+                    warehouse.w_id,
+                    amount,
+                    self.c_data
+                );
+                let new_c_data_trimed = &new_c_data[0..self.c_data.len()];
+
+                diesel::update(row)
+                    .set((
+                        customers::c_balance.eq(customers::c_balance - amount),
+                        customers::c_ytd_payment.eq(customers::c_ytd_payment + amount),
+                        customers::c_data.eq(new_c_data_trimed),
+                    ))
+                    .get_result::<Self>(conn)?
+            } else {
+                diesel::update(row)
+                    .set((
+                        customers::c_balance.eq(customers::c_balance - amount),
+                        customers::c_ytd_payment.eq(customers::c_ytd_payment + amount),
+                    ))
+                    .get_result::<Self>(conn)?
+            };
+
+            // Insert history
+            let history = History::insert(&updated_customer, &warehouse, &district, amount, conn)?;
+
+            Ok((updated_customer, history, district, warehouse))
+        })
     }
 
     /// Returns last order
@@ -610,6 +677,47 @@ pub struct History {
     h_date: chrono::NaiveDateTime,
     h_amount: f64,
     h_data: String,
+}
+
+impl History {
+    fn insert(
+        customer: &Customer,
+        warehouse_at: &Warehouse,
+        district_at: &District,
+        amount: f64,
+        conn: &mut DbConnection,
+    ) -> QueryResult<Self> {
+        use schema::histories;
+
+        // max history_id
+        let cur_h_id = histories::table
+            .select(diesel::dsl::max(histories::h_id))
+            .first::<Option<i32>>(conn)?
+            .unwrap_or(0);
+
+        let history = Self {
+            h_id: cur_h_id + 1,
+            h_c_id: customer.c_id,
+            h_c_d_id: customer.c_d_id,
+            h_c_w_id: customer.c_w_id,
+            h_d_id: district_at.d_id,
+            h_w_id: warehouse_at.w_id,
+            h_date: chrono::Utc::now().naive_utc(),
+            h_amount: amount,
+            h_data: format!("{}    {}", warehouse_at.w_name, district_at.d_name),
+        };
+
+        diesel::insert_into(histories::table)
+            .values(&history)
+            .execute(conn)?;
+
+        Ok(history)
+    }
+
+    /// history timestamp
+    pub fn timestamp(&self) -> chrono::NaiveDateTime {
+        self.h_date
+    }
 }
 
 #[derive(Debug, Insertable, Queryable, Selectable)]

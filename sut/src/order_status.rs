@@ -7,7 +7,6 @@ pub(crate) async fn order_status(
     extract::Path((warehouse_id, district_id, customer_id)): extract::Path<(i32, i32, i32)>,
 ) -> Result<axum::response::Json<if_types::OrderStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
-        //use tpcc_models::Warehouse;
         let mut conn = pool.get()?;
 
         // Search customer by ID

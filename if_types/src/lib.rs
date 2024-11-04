@@ -28,6 +28,13 @@ pub struct PaymentRequest {
     pub amount: f64,
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct PaymentResponse {
+    pub amount: f64,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    pub paied_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Order-Status Transaction output,
 /// TPC-C standard spec. 2.6
 #[derive(serde::Deserialize, serde::Serialize)]
