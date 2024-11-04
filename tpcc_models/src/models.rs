@@ -600,8 +600,8 @@ impl Customer {
                     "BC" // 90%
                 }
                 .to_string();
-                let c_last = if i < 1000 {
-                    last_name(i) // spec. 4.3.2.3
+                let c_last = if i < 999 {
+                    last_name(i + 1) // spec. 4.3.2.3
                 } else {
                     last_name(non_uniform_random_i32(255, 0..=999))
                 };
