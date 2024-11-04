@@ -201,7 +201,10 @@ impl Stock {
             1 // remote order
         };
 
-        let updated_stock = diesel::update(stocks::table.find(self.id()))
+        let row = stocks::table
+            .filter(stocks::s_w_id.eq(self.s_w_id))
+            .filter(stocks::s_i_id.eq(self.s_i_id));
+        let updated_stock = diesel::update(row)
             .set((
                 stocks::s_quantity.eq(new_qty),
                 stocks::s_ytd.eq(stocks::s_ytd + quantity),
@@ -266,7 +269,8 @@ impl StockedItem {
         use schema::{items, stocks};
         let item = items::table.find(item_id).first::<Item>(conn)?;
         let stock = stocks::table
-            .find((warehouse_id, item_id))
+            .filter(stocks::s_w_id.eq(warehouse_id))
+            .filter(stocks::s_i_id.eq(item_id))
             .first::<Stock>(conn)?;
 
         Ok(Self { item, stock })
@@ -294,8 +298,10 @@ impl District {
     /// Get district by it's id
     ///   public API: call warehouse.find_districts() instead.
     fn find(warehouse_id: i32, district_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
-        schema::districts::table
-            .find((warehouse_id, district_id))
+        use schema::districts;
+        districts::table
+            .filter(districts::d_w_id.eq(warehouse_id))
+            .filter(districts::d_id.eq(district_id))
             .first(conn)
     }
 
@@ -325,19 +331,20 @@ impl District {
         customer: &Customer,
         items: &[(StockedItem, i32)], // (item, quantity)
         conn: &mut DbConnection,
-    ) -> QueryResult<Order> {
+    ) -> QueryResult<(Order, Vec<OrderLine>)> {
         use diesel::Connection;
 
         conn.transaction(|conn| {
             // Run transaction
             let order_id = self.issue_order_id(conn)?;
-            let order = Order::insert(self.d_w_id, self.d_id, order_id, customer, items, conn)?;
+            let (order, lines) =
+                Order::insert(self.d_w_id, self.d_id, order_id, customer, items, conn)?;
 
             // allocate stock
             for (item, qty) in items {
                 item.stock.allocate(*qty, self.d_w_id, conn)?;
             }
-            Ok(order)
+            Ok((order, lines))
         })
     }
 
@@ -346,7 +353,9 @@ impl District {
         use schema::districts;
 
         // Increment d_next_o_id
-        let next_id = diesel::update(districts::table.find(self.id()))
+        let row = districts::table.filter(districts::d_w_id.eq(self.d_w_id))
+        .filter(districts::d_id.eq(self.d_id));
+        let next_id = diesel::update(row)
             .set(districts::d_next_o_id.eq(districts::d_next_o_id + 1))
             .returning(districts::d_next_o_id)
             .get_result(conn)?;
@@ -442,8 +451,11 @@ impl Customer {
         customer_id: i32,
         conn: &mut DbConnection,
     ) -> QueryResult<Self> {
-        schema::customers::table
-            .find((warehouse_id, district_id, customer_id))
+        use schema::customers;
+        customers::table
+            .filter(customers::c_w_id.eq(warehouse_id))
+            .filter(customers::c_d_id.eq(district_id))
+            .filter(customers::c_id.eq(customer_id))
             .first(conn)
     }
 
@@ -623,7 +635,7 @@ impl Order {
         customer: &Customer,
         items: &[(StockedItem, i32)],
         conn: &mut DbConnection,
-    ) -> QueryResult<Self> {
+    ) -> QueryResult<(Self, Vec<OrderLine>)> {
         use schema::{new_orders, order_lines, orders};
 
         // Order
@@ -658,10 +670,10 @@ impl Order {
             .map(|(idx, (item, qty))| OrderLine::new(customer, item, order_id, idx as i32, *qty))
             .collect::<Vec<_>>();
         diesel::insert_into(order_lines::table)
-            .values(insert_order_lines)
+            .values(&insert_order_lines)
             .execute(conn)?;
 
-        Ok(insert_order)
+        Ok((insert_order, insert_order_lines))
     }
 
     /// OrderLines of this Order
