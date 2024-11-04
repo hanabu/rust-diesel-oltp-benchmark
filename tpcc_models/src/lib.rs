@@ -9,5 +9,5 @@ pub use diesel::result::Error as QueryError;
 pub use diesel::Connection;
 
 pub use models::prepare;
-pub use models::{Customer, District, Order, StockedItem, Warehouse};
+pub use models::{Customer, District, Order, OrderLine, StockedItem, Warehouse};
 pub use sqlite::{connect, pool, DbConnection, Pool};

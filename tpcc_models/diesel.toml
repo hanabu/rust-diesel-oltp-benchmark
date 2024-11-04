@@ -2,8 +2,8 @@
 # see https://diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "tpcc_models/src/schema.rs"
+file = "src/schema.rs"
 #custom_type_derives = ["diesel::query_builder::QueryId"]
 
 [migrations_directory]
-dir = "tpcc_models/migrations"
+dir = "migrations"

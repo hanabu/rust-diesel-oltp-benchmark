@@ -1,4 +1,7 @@
+mod customer;
 mod new_order;
+mod order_status;
+mod payment;
 
 // pub type Error = Box<(dyn std::error::Error + Send + Sync + 'static)>;
 
@@ -15,6 +18,12 @@ pub async fn app() -> axum::Router {
     axum::Router::new()
         .route("/", get(status))
         .route("/orders", post(new_order::new_order))
+        .route("/payment", post(payment::payment))
+        .route(
+            "/customers/:warehouse_id/:district_id/:customer_id/orders",
+            get(order_status::order_status),
+        )
+        .route("/customers", get(customer::customer_by_lastname))
         .with_state(pool)
 }
 
