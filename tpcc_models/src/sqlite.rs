@@ -41,3 +41,10 @@ fn setup_conn(conn: &mut DbConnection) -> QueryResult<()> {
     conn.batch_execute("PRAGMA busy_timeout = 1000;")?; // mili-sec
     Ok(())
 }
+
+/// SQLite setup in initial connection
+pub fn vacuum(conn: &mut DbConnection) -> QueryResult<()> {
+    use diesel::connection::SimpleConnection;
+    conn.batch_execute("VACUUM;")?;
+    Ok(())
+}

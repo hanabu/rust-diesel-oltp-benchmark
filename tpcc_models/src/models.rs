@@ -1,8 +1,8 @@
 use crate::{schema, DbConnection};
 use diesel::prelude::*;
 
-/// Run database migration, prepare initial records
-pub fn prepare(scale_factor: i32, conn: &mut DbConnection) -> diesel::migration::Result<()> {
+/// Prepare schema
+pub fn prepare_schema(conn: &mut DbConnection) -> diesel::migration::Result<()> {
     use diesel_migrations::MigrationHarness;
     const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
         diesel_migrations::embed_migrations!("migrations");
@@ -10,6 +10,27 @@ pub fn prepare(scale_factor: i32, conn: &mut DbConnection) -> diesel::migration:
     // Run migration
     conn.run_pending_migrations(MIGRATIONS)?;
 
+    Ok(())
+}
+
+/// Cleanup existing test data
+pub fn cleanup(conn: &mut DbConnection) -> QueryResult<()> {
+    // Delete all rows
+    diesel::delete(schema::order_lines::table).execute(conn)?;
+    diesel::delete(schema::new_orders::table).execute(conn)?;
+    diesel::delete(schema::orders::table).execute(conn)?;
+    diesel::delete(schema::stocks::table).execute(conn)?;
+    diesel::delete(schema::items::table).execute(conn)?;
+    diesel::delete(schema::histories::table).execute(conn)?;
+    diesel::delete(schema::customers::table).execute(conn)?;
+    diesel::delete(schema::districts::table).execute(conn)?;
+    diesel::delete(schema::warehouses::table).execute(conn)?;
+
+    Ok(())
+}
+
+/// Run database migration, prepare initial records
+pub fn prepare_data(scale_factor: i32, conn: &mut DbConnection) -> QueryResult<()> {
     // Prepare initial records
 
     // TPC-C standard spec. 4.3.3, fixed 100_000 items
