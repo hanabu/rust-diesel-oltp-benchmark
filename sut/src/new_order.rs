@@ -1,12 +1,12 @@
 use axum::extract;
-use if_types::NewOrderRequest;
+use if_types::{NewOrderRequest, NewOrderResponse};
 
 /// New-Order Transaction
 /// TPC-C standard spec. 2.4
 pub(crate) async fn new_order(
     extract::State(pool): extract::State<tpcc_models::Pool>,
     extract::Json(params): extract::Json<NewOrderRequest>,
-) -> Result<axum::response::Json<serde_json::Value>, crate::Error> {
+) -> Result<axum::response::Json<NewOrderResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         use tpcc_models::Warehouse;
         let mut conn = pool.get()?;
@@ -28,9 +28,23 @@ pub(crate) async fn new_order(
             })
             .collect::<Result<Vec<_>, crate::Error>>()?;
 
+        // Insert into database
         let (order, lines) = district.insert_order(&customer, &order_items, &mut conn)?;
 
-        todo!()
+        // Calc total amount including discount and tax
+        let ol_amount = lines.iter().map(|ol| ol.amount()).sum::<f64>();
+        let total_amount =
+            ol_amount * (1.0 - customer.discount_rate()) * (1.0 + warehouse.tax() + district.tax());
+
+        let (warehouse_id, district_id, order_id) = order.id();
+        let resp = NewOrderResponse {
+            warehouse_id,
+            district_id,
+            order_id,
+            total_amount,
+        };
+
+        Ok(axum::Json(resp))
     })
     .await?
 }

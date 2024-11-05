@@ -7,12 +7,21 @@ pub struct NewOrderRequest {
     pub district_id: i32,
     pub customer_id: i32,
     pub items: Vec<NewOrderRequestItem>,
+    pub inject_rollback: bool,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct NewOrderRequestItem {
     pub item_id: i32,
     pub quantity: i32,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct NewOrderResponse {
+    pub warehouse_id: i32,
+    pub district_id: i32,
+    pub order_id: i32,
+    pub total_amount: f64,
 }
 
 /// Payment Transaction input,

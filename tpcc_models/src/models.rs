@@ -614,6 +614,11 @@ impl Customer {
         self.c_last.as_str()
     }
 
+    /// Disacount rate for this customer
+    pub fn discount_rate(&self) -> f64 {
+        self.c_discount
+    }
+
     /// Count all rows
     pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
         schema::customers::table
