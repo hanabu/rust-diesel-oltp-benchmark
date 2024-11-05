@@ -1,36 +1,26 @@
 use crate::{schema, DbConnection};
 use diesel::prelude::*;
 
-/// Prepare schema
-pub fn prepare_schema(conn: &mut DbConnection) -> diesel::migration::Result<()> {
+const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+    diesel_migrations::embed_migrations!("migrations");
+
+/// Cleanup existing data
+pub fn cleanup(conn: &mut DbConnection) -> diesel::migration::Result<()> {
     use diesel_migrations::MigrationHarness;
-    const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-        diesel_migrations::embed_migrations!("migrations");
 
     // Run migration
-    conn.run_pending_migrations(MIGRATIONS)?;
-
-    Ok(())
-}
-
-/// Cleanup existing test data
-pub fn cleanup(conn: &mut DbConnection) -> QueryResult<()> {
-    // Delete all rows
-    diesel::delete(schema::order_lines::table).execute(conn)?;
-    diesel::delete(schema::new_orders::table).execute(conn)?;
-    diesel::delete(schema::orders::table).execute(conn)?;
-    diesel::delete(schema::stocks::table).execute(conn)?;
-    diesel::delete(schema::items::table).execute(conn)?;
-    diesel::delete(schema::histories::table).execute(conn)?;
-    diesel::delete(schema::customers::table).execute(conn)?;
-    diesel::delete(schema::districts::table).execute(conn)?;
-    diesel::delete(schema::warehouses::table).execute(conn)?;
+    conn.revert_all_migrations(MIGRATIONS)?;
 
     Ok(())
 }
 
 /// Run database migration, prepare initial records
-pub fn prepare_data(scale_factor: i32, conn: &mut DbConnection) -> QueryResult<()> {
+pub fn prepare(scale_factor: i32, conn: &mut DbConnection) -> diesel::migration::Result<()> {
+    use diesel_migrations::MigrationHarness;
+
+    // Run migration
+    conn.run_pending_migrations(MIGRATIONS)?;
+
     // Prepare initial records
 
     // TPC-C standard spec. 4.3.3, fixed 100_000 items
@@ -65,6 +55,13 @@ pub struct Item {
 }
 
 impl Item {
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::items::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
+    }
+
     // Prepare initial Items
     pub fn prepare(num: i32, conn: &mut DbConnection) -> QueryResult<Vec<Self>> {
         use schema::items;
@@ -126,6 +123,13 @@ impl Warehouse {
     /// Get tax rate of the warehouse
     pub fn tax(&self) -> f64 {
         self.w_tax
+    }
+
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::warehouses::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
     }
 
     /// Prepare Warehose
@@ -235,6 +239,13 @@ impl Stock {
             .get_result(conn)?;
 
         Ok(updated_stock)
+    }
+
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::stocks::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
     }
 
     /// Insert new stocks
@@ -385,6 +396,13 @@ impl District {
         self.d_next_o_id = next_id;
 
         Ok(next_id - 1)
+    }
+
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::districts::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
     }
 
     /// Insert new districts
@@ -596,6 +614,13 @@ impl Customer {
         self.c_last.as_str()
     }
 
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::customers::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
+    }
+
     /// Insert new customers
     ///   public API: call district.prepare_customers() instead.
     fn prepare(
@@ -739,6 +764,13 @@ impl History {
     pub fn timestamp(&self) -> chrono::NaiveDateTime {
         self.h_date
     }
+
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::histories::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
+    }
 }
 
 #[derive(Debug, Insertable, Queryable, Selectable)]
@@ -828,6 +860,13 @@ impl Order {
 
     pub fn carrier_id(&self) -> Option<i32> {
         self.o_carrier_id
+    }
+
+    /// Count all rows
+    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+        schema::orders::table
+            .select(diesel::dsl::count_star())
+            .first(conn)
     }
 
     /// Insert new orders

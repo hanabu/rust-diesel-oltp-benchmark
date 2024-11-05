@@ -78,3 +78,18 @@ pub struct Customer {
     pub firstname: String,
     pub lastname: String,
 }
+
+/// Setup initial database
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct PrepareDbRequest {
+    pub scale_factor: i32,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct DbStatusResponse {
+    pub warehouse_count: i64,
+    pub district_count: i64,
+    pub customer_count: i64,
+    pub order_count: i64,
+    pub database_bytes: i64,
+}

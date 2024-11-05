@@ -48,3 +48,33 @@ pub fn vacuum(conn: &mut DbConnection) -> QueryResult<()> {
     conn.batch_execute("VACUUM;")?;
     Ok(())
 }
+
+/// SQLite database size
+pub fn database_size(conn: &mut DbConnection) -> QueryResult<i64> {
+    let page_count = diesel::sql_query("PRAGMA page_count").get_result::<PragmaPageCount>(conn)?;
+    let page_size = diesel::sql_query("PRAGMA page_size").get_result::<PragmaPageSize>(conn)?;
+
+    Ok(page_count.page_count * page_size.page_size)
+}
+
+#[derive(QueryableByName)]
+struct PragmaPageCount {
+    page_count: i64,
+}
+
+diesel::table! {
+    pragma_page_counts(page_count) {
+        page_count -> BigInt
+    }
+}
+
+#[derive(QueryableByName)]
+struct PragmaPageSize {
+    page_size: i64,
+}
+
+diesel::table! {
+    pragma_page_sizes(page_size) {
+        page_size -> BigInt
+    }
+}

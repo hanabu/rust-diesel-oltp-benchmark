@@ -2,6 +2,7 @@ mod customer;
 mod new_order;
 mod order_status;
 mod payment;
+mod setup;
 
 // pub type Error = Box<(dyn std::error::Error + Send + Sync + 'static)>;
 
@@ -16,7 +17,6 @@ pub async fn app() -> axum::Router {
     let pool = tpcc_models::pool(&db_url, 1).expect(&format!("Can not open database {}", db_url));
 
     axum::Router::new()
-        .route("/", get(status))
         .route("/orders", post(new_order::new_order))
         .route("/payment", post(payment::payment))
         .route(
@@ -28,19 +28,16 @@ pub async fn app() -> axum::Router {
             get(customer::customer_by_id),
         )
         .route("/customers", get(customer::customer_by_lastname))
+        .route("/prepare_db", post(setup::prepare_db))
+        .route("/", get(setup::status))
         .with_state(pool)
-}
-
-async fn status(
-    axum::extract::State(pool): axum::extract::State<tpcc_models::Pool>,
-) -> Result<axum::response::Json<serde_json::Value>, Error> {
-    let _conn = pool.get()?;
-    Ok(axum::response::Json(serde_json::json!({})))
 }
 
 /// Error type in request handler
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("database schema setup error")]
+    DbMigrationError(Box<dyn std::error::Error + Send + Sync>),
     #[error("database pool error")]
     DbPoolError(#[from] tpcc_models::PoolError),
     #[error("database query error")]
@@ -60,5 +57,11 @@ impl axum::response::IntoResponse for Error {
             },
             _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
+    }
+}
+
+impl Error {
+    fn migration_error(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        Self::DbMigrationError(e)
     }
 }
