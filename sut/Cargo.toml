@@ -15,9 +15,15 @@ name = "sut"
 path = "src/bin/sut.rs"
 
 # SUT server binary for AWS Lambda
-#[[bin]]
-#name = "bootstrap"
-#path = "src/bin/lambda_bootstrap.rs"
+[[bin]]
+name = "bootstrap"
+path = "src/bin/lambda_bootstrap.rs"
+
+[features]
+default = ["sqlite"]
+mysql = ["tpcc_models/mysql"]
+postgres = ["tpcc_models/postgres"]
+sqlite = ["tpcc_models/sqlite"]
 
 [dependencies]
 axum = { version="0.7" }

@@ -1,2 +1,1 @@
-# SUT : SYstem Uner Test
-
+# SUT : System Under Test , TPC-C like REST API server
