@@ -120,6 +120,11 @@ impl Warehouse {
         District::find(self.w_id, district_id, conn)
     }
 
+    /// All districts under this warehouse
+    pub fn all_districts(&self, conn: &mut DbConnection) -> QueryResult<Vec<District>> {
+        District::all_by_warehouse(self.w_id, conn)
+    }
+
     /// Get tax rate of the warehouse
     pub fn tax(&self) -> f64 {
         self.w_tax
@@ -328,13 +333,22 @@ pub struct District {
 
 impl District {
     /// Get district by it's id
-    ///   public API: call warehouse.find_districts() instead.
+    ///   public API: call warehouse.find_district() instead.
     fn find(warehouse_id: i32, district_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
         use schema::districts;
         districts::table
             .filter(districts::d_w_id.eq(warehouse_id))
             .filter(districts::d_id.eq(district_id))
             .first(conn)
+    }
+
+    /// Get district by warehouse
+    ///   public API: call warehouse.all_districts() instead.
+    fn all_by_warehouse(warehouse_id: i32, conn: &mut DbConnection) -> QueryResult<Vec<Self>> {
+        use schema::districts;
+        districts::table
+            .filter(districts::d_w_id.eq(warehouse_id))
+            .load(conn)
     }
 
     /// PK
@@ -396,6 +410,61 @@ impl District {
         self.d_next_o_id = next_id;
 
         Ok(next_id - 1)
+    }
+
+    /// Delivery transaction
+    /// TPC-C standard spec. 2.7.4
+    pub fn delivery(&self, carrier_id: i32, conn: &mut DbConnection) -> QueryResult<usize> {
+        use diesel::Connection;
+        conn.transaction(|conn| {
+            use schema::{customers, new_orders, orders};
+
+            // Oldest 10 orders
+            let order_ids = new_orders::table
+                .filter(new_orders::no_w_id.eq(self.d_w_id))
+                .filter(new_orders::no_d_id.eq(self.d_id))
+                .order(new_orders::no_o_id)
+                .select(new_orders::no_o_id)
+                .limit(10)
+                .load::<i32>(conn)?;
+            // Remove new_orders to be delivered
+            diesel::delete(
+                new_orders::table
+                    .filter(new_orders::no_w_id.eq(self.d_w_id))
+                    .filter(new_orders::no_d_id.eq(self.d_id))
+                    .filter(new_orders::no_o_id.eq_any(&order_ids)),
+            )
+            .execute(conn)?;
+
+            let orders_to_deliver: Vec<Order> = diesel::update(
+                orders::table
+                    .filter(orders::o_w_id.eq(self.d_w_id))
+                    .filter(orders::o_d_id.eq(self.d_id))
+                    .filter(orders::o_id.eq_any(order_ids)),
+            )
+            .set(orders::o_carrier_id.eq(carrier_id))
+            .get_results(conn)?;
+
+            let tm = chrono::Utc::now().naive_utc();
+            for order in &orders_to_deliver {
+                let lines = order.record_lines_deliver_at(tm, conn)?;
+                let total_amount = lines.iter().map(|ol| ol.amount()).sum::<f64>();
+
+                // Update customer balance
+                diesel::update(
+                    customers::table
+                        .filter(customers::c_w_id.eq(self.d_w_id))
+                        .filter(customers::c_d_id.eq(self.d_id))
+                        .filter(customers::c_id.eq(order.o_c_id)),
+                )
+                .set((
+                    customers::c_balance.eq(customers::c_balance + total_amount),
+                    customers::c_delivery_cnt.eq(customers::c_delivery_cnt + 1),
+                ))
+                .execute(conn)?;
+            }
+            Ok(orders_to_deliver.len())
+        })
     }
 
     /// Count all rows
@@ -852,6 +921,26 @@ impl Order {
             .filter(order_lines::ol_o_id.eq(self.o_id))
             .order(order_lines::ol_number)
             .load::<OrderLine>(conn)
+    }
+
+    /// Record delivery timestamp to OrderLines
+    fn record_lines_deliver_at(
+        &self,
+        tm: chrono::NaiveDateTime,
+        conn: &mut DbConnection,
+    ) -> QueryResult<Vec<OrderLine>> {
+        use schema::order_lines;
+
+        let updated_lines = diesel::update(
+            order_lines::table
+                .filter(order_lines::ol_w_id.eq(self.o_w_id))
+                .filter(order_lines::ol_d_id.eq(self.o_d_id))
+                .filter(order_lines::ol_o_id.eq(self.o_id)),
+        )
+        .set(order_lines::ol_delivery_d.eq(tm))
+        .get_results::<OrderLine>(conn)?;
+
+        Ok(updated_lines)
     }
 
     /// PK

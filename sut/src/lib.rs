@@ -1,4 +1,5 @@
 mod customer;
+mod delivery;
 mod new_order;
 mod order_status;
 mod payment;
@@ -28,6 +29,7 @@ pub async fn app() -> axum::Router {
             get(customer::customer_by_id),
         )
         .route("/customers", get(customer::customer_by_lastname))
+        .route("/delivery", post(delivery::new_order))
         .route("/prepare_db", post(setup::prepare_db))
         .route("/", get(setup::status))
         .with_state(pool)

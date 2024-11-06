@@ -88,6 +88,19 @@ pub struct Customer {
     pub lastname: String,
 }
 
+/// Delivery Transaction input,
+/// TPC-C standard spec. 2.7
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct DeliveryRequest {
+    pub warehouse_id: i32,
+    pub carrier_id: i32,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct DeliveryResponse {
+    pub deliverd_orders: i32,
+}
+
 /// Setup initial database
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct PrepareDbRequest {
