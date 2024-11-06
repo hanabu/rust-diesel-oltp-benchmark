@@ -205,11 +205,6 @@ pub struct Stock {
 }
 
 impl Stock {
-    /// PK
-    fn id(&self) -> (i32, i32) {
-        (self.s_w_id, self.s_i_id)
-    }
-
     /// TPC-C standard spec. 2.4.2.2
     /// Allocate stock by New Order transaction
     fn allocate(
@@ -351,11 +346,6 @@ impl District {
             .load(conn)
     }
 
-    /// PK
-    fn id(&self) -> (i32, i32) {
-        (self.d_w_id, self.d_id)
-    }
-
     /// Get tax rate of the district
     pub fn tax(&self) -> f64 {
         self.d_tax
@@ -465,6 +455,33 @@ impl District {
             }
             Ok(orders_to_deliver.len())
         })
+    }
+
+    /// Stock-Level transaction
+    /// TPC-C standard spec. 2.8.2
+    pub fn check_stock_level(
+        &self,
+        stock_level: i32,
+        conn: &mut DbConnection,
+    ) -> QueryResult<usize> {
+        use schema::{order_lines, stocks};
+
+        let item_ids: Vec<i32> = order_lines::table
+            .filter(order_lines::ol_w_id.eq(self.d_w_id))
+            .filter(order_lines::ol_d_id.eq(self.d_id))
+            .filter(order_lines::ol_o_id.ge(self.d_next_o_id - 20))
+            .select(order_lines::ol_i_id)
+            .load(conn)?;
+
+        // Count items lower than stock level
+        let low_stocks: i64 = stocks::table
+            .filter(stocks::s_w_id.eq(self.d_w_id))
+            .filter(stocks::s_i_id.eq_any(&item_ids))
+            .filter(stocks::s_quantity.lt(stock_level))
+            .select(diesel::dsl::count_distinct(stocks::s_i_id))
+            .first(conn)?;
+
+        Ok(low_stocks as usize)
     }
 
     /// Count all rows

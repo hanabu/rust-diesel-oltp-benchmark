@@ -95,10 +95,16 @@ pub struct DeliveryRequest {
     pub warehouse_id: i32,
     pub carrier_id: i32,
 }
-
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct DeliveryResponse {
     pub deliverd_orders: i32,
+}
+
+/// Stock-Level Transaction input,
+/// TPC-C standard spec. 2.8
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct StockLevelResponse {
+    pub low_stocks: i32,
 }
 
 /// Setup initial database
