@@ -1505,6 +1505,8 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "tpcc_rand",
+ "url",
 ]
 
 [[package]]
