@@ -28,18 +28,11 @@ pub(crate) async fn customer_by_id(
     .await?
 }
 
-#[derive(serde::Deserialize)]
-pub(crate) struct CustomersByLastnameParams {
-    warehouse_id: i32,
-    district_id: i32,
-    lastname: String,
-}
-
 /// Customer by last name, used in Payment, Order-Status Transaction
 /// TPC-C standard spec. 2.5, 2.6
 pub(crate) async fn customer_by_lastname(
     extract::State(pool): extract::State<tpcc_models::Pool>,
-    extract::Query(params): extract::Query<CustomersByLastnameParams>,
+    extract::Query(params): extract::Query<if_types::CustomersByLastnameParams>,
 ) -> Result<axum::response::Json<CustomersResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;

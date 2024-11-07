@@ -72,6 +72,14 @@ pub struct OrderLine {
     pub delivery_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Query parameter of customers_by_lastname
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct CustomersByLastnameParams {
+    pub warehouse_id: i32,
+    pub district_id: i32,
+    pub lastname: String,
+}
+
 /// Response of customers_by_lastname
 /// TPC-C standard spec. 2.5, 2.6
 #[derive(serde::Deserialize, serde::Serialize)]
