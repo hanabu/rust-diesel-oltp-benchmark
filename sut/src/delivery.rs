@@ -3,7 +3,7 @@ use if_types::{DeliveryRequest, DeliveryResponse};
 
 /// New-Order Transaction
 /// TPC-C standard spec. 2.4
-pub(crate) async fn new_order(
+pub(crate) async fn delivery(
     extract::State(pool): extract::State<tpcc_models::Pool>,
     extract::Json(params): extract::Json<DeliveryRequest>,
 ) -> Result<axum::response::Json<DeliveryResponse>, crate::Error> {

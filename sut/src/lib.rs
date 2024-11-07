@@ -30,7 +30,7 @@ pub async fn app() -> axum::Router {
             get(customer::customer_by_id),
         )
         .route("/customers", get(customer::customer_by_lastname))
-        .route("/delivery", post(delivery::new_order))
+        .route("/delivery", post(delivery::delivery))
         .route(
             "/districts/:warehouse_id/:district_id/check_stocks",
             get(stock_level::check_stocks),
