@@ -4,15 +4,14 @@ members = [
     "if_types",
     "rte",
     "sut",
-    "tpcc_models"
+    "tpcc_models",
+    "tpcc_rand"
 ]
-default-members = ["rte"]
 
 [workspace.dependencies]
 chrono = { version="0.4", default-features=false, features=["clock", "serde", "std"] }
 dotenvy = "0.15"
 env_logger = { version = "0.8", default-features=false }
-rand = "0.8"
 serde = { version="1", features=["derive"] }
 serde_json = "1"
 thiserror = "1"

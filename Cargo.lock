@@ -2053,6 +2053,13 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "libsqlite3-sys",
+ "tpcc_rand",
+]
+
+[[package]]
+name = "tpcc_rand"
+version = "0.1.0"
+dependencies = [
  "rand",
 ]
 
