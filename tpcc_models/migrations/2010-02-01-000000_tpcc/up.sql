@@ -55,6 +55,8 @@ CREATE TABLE customers (
   FOREIGN KEY (c_w_id,c_d_id) REFERENCES districts (d_w_id,d_id)
 );
 
+CREATE INDEX idx_customer_lastname ON customers (c_w_id, c_d_id, c_last);
+
 CREATE TABLE histories (
   h_id     INTEGER          NOT NULL, -- h_id is not required in TPC-C
   h_c_id   INTEGER          NOT NULL,
