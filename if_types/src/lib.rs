@@ -112,7 +112,7 @@ pub struct DeliveryResponse {
 /// TPC-C standard spec. 2.8
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct StockLevelParams {
-   pub stock_level: i32,
+    pub stock_level: i32,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
