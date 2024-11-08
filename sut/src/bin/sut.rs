@@ -8,7 +8,8 @@ async fn main() -> Result<(), lambda_http::Error> {
         "Server starts listening on {:?}",
         listener.local_addr().unwrap()
     );
-    axum::serve(listener, app().await).await?;
+    let db_connections = 2 * num_cpus::get() as u32;
+    axum::serve(listener, app(db_connections).await).await?;
 
     Ok(())
 }
