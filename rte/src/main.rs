@@ -172,10 +172,12 @@ async fn run(args: RunArgs) -> Result<(), Error> {
     let counts = futures::future::try_join_all(futs).await?;
     log::info!("Finished");
 
+    let total_counts = counts.into_iter().sum::<i32>();
     println!(
-        "{} transactions in {:.3} secs",
-        counts.into_iter().sum::<i32>(),
-        args.duration
+        "{:.1} tpm = {} transactions / {:.3} secs",
+        (total_counts as f32) * 60.0 / args.duration,
+        total_counts,
+        args.duration,
     );
 
     Ok(())
