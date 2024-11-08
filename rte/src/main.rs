@@ -140,8 +140,8 @@ async fn run(args: RunArgs) -> Result<(), Error> {
         .timeout(std::time::Duration::from_secs(5))
         .build()?;
 
-    new_order_req(1, &client, &endpoints, &mut rand).await?;
-    payment_req(1, &client, &endpoints, &mut rand).await?;
+    new_order_req(1, &endpoints, &client, &mut rand).await?;
+    payment_req(1, &endpoints, &client, &mut rand).await?;
     Ok(())
 }
 
@@ -149,8 +149,8 @@ async fn run(args: RunArgs) -> Result<(), Error> {
 /// TPC-C standard spec. 2.4
 async fn new_order_req(
     warehouse_id: i32,
-    client: &reqwest::Client,
     endpoints: &EndpointUrls,
+    client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
 ) -> Result<bool, Error> {
     // 2.4.1.3
@@ -187,19 +187,19 @@ async fn new_order_req(
 /// TPC-C standard spec. 2.5
 async fn payment_req(
     warehouse_id: i32,
-    client: &reqwest::Client,
     endpoints: &EndpointUrls,
+    client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
 ) -> Result<bool, Error> {
     let district_id = rand.i32_range(1..=10);
 
     let (c_w_id, c_d_id) = if rand.i32_range(1..=100) <= 85 {
         // home district
-        (1, district_id)
+        (warehouse_id, district_id)
     } else {
         // remote district
         // ToDo: random remote warehouse ID
-        (1, rand.i32_range(1..=10))
+        (warehouse_id, rand.i32_range(1..=10))
     };
 
     let c_id = if rand.i32_range(1..=100) <= 60 {
@@ -207,20 +207,7 @@ async fn payment_req(
         let name_idx = rand.non_uniform_i32(255, 0..=999);
         let lastname = tpcc_rand::TpcRandom::last_name(name_idx);
 
-        // Get customer ID by name
-        let resp = client
-            .get(endpoints.customer_by_lastname())
-            .query(&if_types::CustomersByLastnameParams {
-                warehouse_id,
-                district_id,
-                lastname,
-            })
-            .send()
-            .await?;
-        let customers = resp.json::<if_types::CustomersResponse>().await?.customers;
-        let customer = &customers[customers.len() / 2];
-
-        customer.customer_id
+        customer_id_by_lastname(warehouse_id, district_id, lastname, endpoints, client).await?
     } else {
         // by id
         rand.non_uniform_i32(1023, 1..=3000)
@@ -245,4 +232,30 @@ async fn payment_req(
     println!("Payment succeeded in {:.03}s", t.elapsed().as_secs_f32());
 
     Ok(true)
+}
+
+/// Search customer_id by lastname
+async fn customer_id_by_lastname(
+    warehouse_id: i32,
+    district_id: i32,
+    lastname: String,
+    endpoints: &EndpointUrls,
+    client: &reqwest::Client,
+) -> Result<i32, Error> {
+    // Get customer ID by name
+    let t = std::time::Instant::now();
+    let resp = client
+        .get(endpoints.customer_by_lastname())
+        .query(&if_types::CustomersByLastnameParams {
+            warehouse_id,
+            district_id,
+            lastname,
+        })
+        .send()
+        .await?;
+    let customers = resp.json::<if_types::CustomersResponse>().await?.customers;
+    let customer = &customers[customers.len() / 2];
+    println!("Customer by lastname in {:.03}s", t.elapsed().as_secs_f32());
+
+    Ok(customer.customer_id)
 }
