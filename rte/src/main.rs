@@ -76,6 +76,24 @@ impl EndpointUrls {
     pub fn payment(&self) -> url::Url {
         self.payment.clone()
     }
+    pub fn order_status(&self, warehouse_id: i32, district_id: i32, customer_id: i32) -> url::Url {
+        let path = format!(
+            "/customers/{}/{}/{}/orders",
+            warehouse_id, district_id, customer_id
+        );
+        let mut order_status = self.base.clone();
+        order_status.set_path(&path);
+        order_status
+    }
+    pub fn delivery(&self) -> url::Url {
+        self.delivery.clone()
+    }
+    pub fn check_stocks(&self, warehouse_id: i32, district_id: i32) -> url::Url {
+        let path = format!("/districts/{}/{}/check_stocks", warehouse_id, district_id);
+        let mut check_stocks = self.base.clone();
+        check_stocks.set_path(&path);
+        check_stocks
+    }
     pub fn customer_by_lastname(&self) -> url::Url {
         self.customer.clone()
     }
@@ -142,6 +160,9 @@ async fn run(args: RunArgs) -> Result<(), Error> {
 
     new_order_req(1, &endpoints, &client, &mut rand).await?;
     payment_req(1, &endpoints, &client, &mut rand).await?;
+    order_status_req(1, &endpoints, &client, &mut rand).await?;
+    delivery_req(1, &endpoints, &client, &mut rand).await?;
+    stock_level_req(1, &endpoints, &client, &mut rand).await?;
     Ok(())
 }
 
@@ -191,6 +212,7 @@ async fn payment_req(
     client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
 ) -> Result<bool, Error> {
+    // 2.5.1.2
     let district_id = rand.i32_range(1..=10);
 
     let (c_w_id, c_d_id) = if rand.i32_range(1..=100) <= 85 {
@@ -213,7 +235,6 @@ async fn payment_req(
         rand.non_uniform_i32(1023, 1..=3000)
     };
 
-    // 2.5.1.2
     let req = if_types::PaymentRequest {
         terminal_id: warehouse_id,
         warehouse_id: warehouse_id,
@@ -228,9 +249,116 @@ async fn payment_req(
     let t = std::time::Instant::now();
     let resp = client.post(endpoints.payment()).json(&req).send().await?;
 
-    let _resp = resp.json::<if_types::PaymentResponse>().await?;
+    let _resp = resp
+        .error_for_status()?
+        .json::<if_types::PaymentResponse>()
+        .await?;
     println!("Payment succeeded in {:.03}s", t.elapsed().as_secs_f32());
 
+    Ok(true)
+}
+
+/// Order-Status Transaction
+/// TPC-C standard spec. 2.6
+async fn order_status_req(
+    warehouse_id: i32,
+    endpoints: &EndpointUrls,
+    client: &reqwest::Client,
+    rand: &mut tpcc_rand::TpcRandom,
+) -> Result<bool, Error> {
+    // 2.6.1.2
+    let district_id = rand.i32_range(1..=10);
+
+    let c_id = if rand.i32_range(1..=100) <= 60 {
+        // by name
+        let name_idx = rand.non_uniform_i32(255, 0..=999);
+        let lastname = tpcc_rand::TpcRandom::last_name(name_idx);
+
+        customer_id_by_lastname(warehouse_id, district_id, lastname, endpoints, client).await?
+    } else {
+        // by id
+        rand.non_uniform_i32(1023, 1..=3000)
+    };
+
+    let t = std::time::Instant::now();
+    let resp = client
+        .get(endpoints.order_status(warehouse_id, district_id, c_id))
+        .send()
+        .await?;
+
+    let resp = resp
+        .error_for_status()?
+        .json::<if_types::OrderStatusResponse>()
+        .await?;
+    println!(
+        "Order-Status succeeded in {:.03}s, {} order found.",
+        t.elapsed().as_secs_f32(),
+        resp.orders.len()
+    );
+
+    Ok(true)
+}
+
+/// Delivery Transaction
+/// TPC-C standard spec. 2.7
+async fn delivery_req(
+    warehouse_id: i32,
+    endpoints: &EndpointUrls,
+    client: &reqwest::Client,
+    rand: &mut tpcc_rand::TpcRandom,
+) -> Result<i32, Error> {
+    // 2.7.1.2
+    let carrier_id = rand.i32_range(1..=10);
+    let req = if_types::DeliveryRequest {
+        warehouse_id,
+        carrier_id,
+    };
+
+    let t = std::time::Instant::now();
+    let resp = client.post(endpoints.delivery()).json(&req).send().await?;
+
+    let resp = resp
+        .error_for_status()?
+        .json::<if_types::DeliveryResponse>()
+        .await?;
+    println!(
+        "Delivery succeeded in {:.03}s, {} orders delivered.",
+        t.elapsed().as_secs_f32(),
+        resp.deliverd_orders
+    );
+
+    Ok(resp.deliverd_orders)
+}
+
+/// Stock-Level Transaction
+/// TPC-C standard spec. 2.8
+async fn stock_level_req(
+    warehouse_id: i32,
+    endpoints: &EndpointUrls,
+    client: &reqwest::Client,
+    rand: &mut tpcc_rand::TpcRandom,
+) -> Result<bool, Error> {
+    for district_id in 1..=10 {
+        let stock_level = rand.i32_range(10..=20);
+
+        let t = std::time::Instant::now();
+        let resp = client
+            .get(endpoints.check_stocks(warehouse_id, district_id))
+            .query(&if_types::StockLevelParams { stock_level })
+            .send()
+            .await?;
+
+        let resp = resp
+            .error_for_status()?
+            .json::<if_types::StockLevelResponse>()
+            .await?;
+        println!(
+            "Stock-Level succeeded in {:.03}s, in district {}, {} low stocks found.",
+            t.elapsed().as_secs_f32(),
+            district_id,
+            resp.low_stocks
+        );
+    }
     Ok(true)
 }
 
