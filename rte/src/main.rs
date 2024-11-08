@@ -29,7 +29,7 @@ struct PrepareArgs {
 struct RunArgs {
     /// Cuncurrency / scale_factor
     #[arg(short, long, default_value = "1")]
-    concurrent: f32,
+    concurrent: i32,
     /// Duration in secs
     #[arg(short, long, default_value = "60")]
     duration: f32,
@@ -102,6 +102,10 @@ impl EndpointUrls {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     use clap::Parser;
+
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
     let cli = Cli::parse();
 
     match cli.command {
@@ -120,7 +124,7 @@ async fn prepare(args: PrepareArgs) -> Result<(), Error> {
 
     let endpoints = EndpointUrls::try_from(args.endpoint.as_str())?;
     let endpoint = endpoints.prepare_db();
-    println!(
+    log::info!(
         "Requesting POST {} with scale_factor={}",
         endpoint.as_str(),
         args.scale_factor
@@ -136,7 +140,7 @@ async fn prepare(args: PrepareArgs) -> Result<(), Error> {
         .await?;
 
     let resp = resp.json::<if_types::DbStatusResponse>().await?;
-    println!(
+    log::info!(
         "Preparation succeeded in {:.03}s",
         t.elapsed().as_secs_f32()
     );
@@ -151,19 +155,57 @@ async fn prepare(args: PrepareArgs) -> Result<(), Error> {
 
 /// Run benchmark
 async fn run(args: RunArgs) -> Result<(), Error> {
-    let mut rand = tpcc_rand::TpcRandom::new();
     let endpoints = EndpointUrls::try_from(args.endpoint.as_str())?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()?;
 
-    new_order_req(1, &endpoints, &client, &mut rand).await?;
-    payment_req(1, &endpoints, &client, &mut rand).await?;
-    order_status_req(1, &endpoints, &client, &mut rand).await?;
-    delivery_req(1, &endpoints, &client, &mut rand).await?;
-    stock_level_req(1, &endpoints, &client, &mut rand).await?;
+    let start_t = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let end_t = start_t + std::time::Duration::from_secs_f32(args.duration);
+    let term_t = end_t + std::time::Duration::from_secs(5);
+
+    log::info!("Start benchmark");
+    let futs = (0..(args.concurrent)).map(|_i| async {
+        benchmark_single_terminal(start_t, end_t, term_t, 1, &endpoints, &client).await
+    });
+    let counts = futures::future::try_join_all(futs).await?;
+    log::info!("Finished");
+
+    println!(
+        "{} transactions in {:.3} secs",
+        counts.into_iter().sum::<i32>(),
+        args.duration
+    );
+
     Ok(())
+}
+
+async fn benchmark_single_terminal(
+    start_t: std::time::Instant,
+    end_t: std::time::Instant,
+    term_t: std::time::Instant,
+    warehouse_id: i32,
+    endpoints: &EndpointUrls,
+    client: &reqwest::Client,
+) -> Result<i32, Error> {
+    let mut counts = 0;
+    let mut rand = tpcc_rand::TpcRandom::new();
+
+    while std::time::Instant::now() < term_t {
+        new_order_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+        payment_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+        order_status_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+        delivery_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+        stock_level_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+
+        // only counts benchmark period (excludes ramp-up, ramp-down)
+        let now = std::time::Instant::now();
+        if start_t <= now && now < end_t {
+            counts += 1;
+        }
+    }
+    Ok(counts)
 }
 
 /// New-Order Transaction
@@ -199,7 +241,7 @@ async fn new_order_req(
     let resp = client.post(endpoints.new_order()).json(&req).send().await?;
 
     let _resp = resp.json::<if_types::NewOrderResponse>().await?;
-    println!("New-Order succeeded in {:.03}s", t.elapsed().as_secs_f32());
+    log::debug!("New-Order succeeded in {:.03}s", t.elapsed().as_secs_f32());
 
     Ok(true)
 }
@@ -253,7 +295,7 @@ async fn payment_req(
         .error_for_status()?
         .json::<if_types::PaymentResponse>()
         .await?;
-    println!("Payment succeeded in {:.03}s", t.elapsed().as_secs_f32());
+    log::debug!("Payment succeeded in {:.03}s", t.elapsed().as_secs_f32());
 
     Ok(true)
 }
@@ -290,7 +332,7 @@ async fn order_status_req(
         .error_for_status()?
         .json::<if_types::OrderStatusResponse>()
         .await?;
-    println!(
+    log::debug!(
         "Order-Status succeeded in {:.03}s, {} order found.",
         t.elapsed().as_secs_f32(),
         resp.orders.len()
@@ -321,7 +363,7 @@ async fn delivery_req(
         .error_for_status()?
         .json::<if_types::DeliveryResponse>()
         .await?;
-    println!(
+    log::debug!(
         "Delivery succeeded in {:.03}s, {} orders delivered.",
         t.elapsed().as_secs_f32(),
         resp.deliverd_orders
@@ -352,7 +394,7 @@ async fn stock_level_req(
             .error_for_status()?
             .json::<if_types::StockLevelResponse>()
             .await?;
-        println!(
+        log::debug!(
             "Stock-Level succeeded in {:.03}s, in district {}, {} low stocks found.",
             t.elapsed().as_secs_f32(),
             district_id,
@@ -383,7 +425,7 @@ async fn customer_id_by_lastname(
         .await?;
     let customers = resp.json::<if_types::CustomersResponse>().await?.customers;
     let customer = &customers[customers.len() / 2];
-    println!("Customer by lastname in {:.03}s", t.elapsed().as_secs_f32());
+    log::debug!("Customer by lastname in {:.03}s", t.elapsed().as_secs_f32());
 
     Ok(customer.customer_id)
 }
