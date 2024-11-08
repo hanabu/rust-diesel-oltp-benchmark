@@ -28,6 +28,7 @@ sqlite = ["tpcc_models/sqlite"]
 [dependencies]
 axum = { version="0.7" }
 env_logger.workspace = true
+log.workspace = true
 if_types = { path="../if_types" }
 lambda_http = { version="0.13", default-features=false, features=["apigw_http"] }
 num_cpus = "1"

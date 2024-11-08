@@ -3,6 +3,8 @@ use sut::*;
 /// main() function for regular server environment or localhost
 #[tokio::main]
 async fn main() -> Result<(), lambda_http::Error> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
     println!(
         "Server starts listening on {:?}",

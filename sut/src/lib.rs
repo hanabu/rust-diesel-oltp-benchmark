@@ -61,9 +61,15 @@ impl axum::response::IntoResponse for Error {
         match self {
             Error::DbQueryError(e) => match e {
                 QueryError::NotFound => StatusCode::NOT_FOUND.into_response(),
-                _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                _ => {
+                    log::error!("{:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
             },
-            _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            _ => {
+                log::error!("{:?}", self);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
         }
     }
 }

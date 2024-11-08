@@ -1767,6 +1767,7 @@ dependencies = [
  "env_logger",
  "if_types",
  "lambda_http",
+ "log",
  "num_cpus",
  "serde",
  "serde_json",

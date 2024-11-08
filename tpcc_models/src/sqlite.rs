@@ -38,7 +38,7 @@ fn setup_conn(conn: &mut DbConnection) -> QueryResult<()> {
     // Force foreign key constraint
     conn.batch_execute("PRAGMA foreign_keys = ON;")?;
     // Timeout
-    conn.batch_execute("PRAGMA busy_timeout = 1000;")?; // mili-sec
+    conn.batch_execute("PRAGMA busy_timeout = 3000;")?; // mili-sec
     Ok(())
 }
 
