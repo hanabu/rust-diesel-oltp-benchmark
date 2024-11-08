@@ -111,6 +111,11 @@ pub struct DeliveryResponse {
 /// Stock-Level Transaction input,
 /// TPC-C standard spec. 2.8
 #[derive(serde::Deserialize, serde::Serialize)]
+pub struct StockLevelParams {
+   pub stock_level: i32,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct StockLevelResponse {
     pub low_stocks: i32,
 }
