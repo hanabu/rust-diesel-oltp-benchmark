@@ -10,7 +10,14 @@ async fn main() -> Result<(), lambda_http::Error> {
         "Server starts listening on {:?}",
         listener.local_addr().unwrap()
     );
-    let db_connections = 2 * num_cpus::get() as u32;
+    // DB connections
+    let db_connections = if let Ok(db_conn) = std::env::var("DB_CONN") {
+        db_conn
+            .parse::<u32>()
+            .expect("Can not parse DB_CONN as integer")
+    } else {
+        2 * num_cpus::get() as u32
+    };
     axum::serve(listener, app(db_connections).await).await?;
 
     Ok(())
