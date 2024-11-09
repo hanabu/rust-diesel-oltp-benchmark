@@ -42,14 +42,14 @@ pub async fn app(db_connectinos: u32) -> axum::Router {
 /// Error type in request handler
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("database schema setup error")]
-    DbMigrationError(Box<dyn std::error::Error + Send + Sync>),
     #[error("database pool error")]
     DbPoolError(#[from] tpcc_models::PoolError),
     #[error("database query error")]
     DbQueryError(#[from] tpcc_models::QueryError),
     #[error("async runtime error")]
     TokioJoinError(#[from] tokio::task::JoinError),
+    #[error("database schema setup error")]
+    DbMigrationError(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl axum::response::IntoResponse for Error {

@@ -6,7 +6,7 @@ pub type Pool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<DbConnection>
 pub fn connect(db_url: &str) -> ConnectionResult<DbConnection> {
     use diesel::prelude::Connection;
 
-    let mut conn = diesel::SqliteConnection::establish(db_url)?;
+    let mut conn = DbConnection::establish(db_url)?;
     setup_conn(&mut conn).map_err(|e| ConnectionError::CouldntSetupConfiguration(e))?;
     Ok(conn)
 }

@@ -10,6 +10,7 @@ pub fn cleanup(conn: &mut DbConnection) -> diesel::migration::Result<()> {
 
     // Run migration
     conn.revert_all_migrations(MIGRATIONS)?;
+    log::warn!("Reverted all migrations");
 
     Ok(())
 }
@@ -20,24 +21,48 @@ pub fn prepare(scale_factor: i32, conn: &mut DbConnection) -> diesel::migration:
 
     // Run migration
     conn.run_pending_migrations(MIGRATIONS)?;
+    log::warn!("Done all migrations");
 
     // Prepare initial records
     let mut rand = tpcc_rand::TpcRandom::new();
 
     // TPC-C standard spec. 4.3.3, fixed 100_000 items
-    Item::prepare(100_000, &mut rand, conn)?;
+    for _ in 0..100 {
+        Item::prepare(1_000, &mut rand, conn)?;
+    }
+    log::info!("100_000 items written");
 
     for _i in 0..scale_factor {
         let warehouse = Warehouse::prepare(&mut rand, conn)?;
         // TPC-C standard spec. 4.3.3, each warehouse has
         //   100_000 stocks, 10 districts
-        warehouse.prepare_stocks(100_000, &mut rand, conn)?;
+        for _ in 0..100 {
+            warehouse.prepare_stocks(1_000, &mut rand, conn)?;
+        }
+        log::info!("100_000 stocks written in warehouse {}", warehouse.w_id);
+
         let districts = warehouse.prepare_districts(10, &mut rand, conn)?;
+        log::info!("10 districts written in warehouse {}", warehouse.w_id);
+
         for district in districts {
             // TPC-C standard spec. 4.3.3, each district has
             //   3_000 customers, 3_000 orders
-            district.prepare_customers(3_000, &mut rand, conn)?;
-            district.prepare_orders(3_000, &mut rand, conn)?;
+            for _ in 0..6 {
+                district.prepare_customers(500, &mut rand, conn)?;
+            }
+            log::info!(
+                "3000 custmers written in warehouse {}, district {}",
+                warehouse.w_id,
+                district.d_id
+            );
+            for _ in 0..6 {
+                district.prepare_orders(500, &mut rand, conn)?;
+            }
+            log::info!(
+                "3000 orders written in warehouse {}, district {}",
+                warehouse.w_id,
+                district.d_id
+            );
         }
     }
 
@@ -759,6 +784,8 @@ impl Customer {
 
         let prepared_customers = (0..num)
             .map(|i| {
+                let c_id = cur_c_id + i + 1;
+
                 // TPC-C standard spec. 4.3.3
                 let c_credit = if 0 == rand.i32_range(0..=9) {
                     "GC" // 10%
@@ -766,13 +793,13 @@ impl Customer {
                     "BC" // 90%
                 }
                 .to_string();
-                let c_last = if i < 999 {
-                    tpcc_rand::TpcRandom::last_name(i + 1) // spec. 4.3.2.3
+                let c_last = if 0 < c_id && c_id <= 1000 {
+                    tpcc_rand::TpcRandom::last_name(c_id - 1) // spec. 4.3.2.3
                 } else {
                     tpcc_rand::TpcRandom::last_name(rand.non_uniform_i32(255, 0..=999))
                 };
                 Self {
-                    c_id: cur_c_id + i + 1,
+                    c_id,
                     c_d_id: district_id,
                     c_w_id: warehouse_id,
                     c_first: rand.alnum_string(8..=16),

@@ -42,7 +42,7 @@ CREATE TABLE customers (
   c_state        TEXT             NOT NULL,
   c_zip          TEXT             NOT NULL,
   c_phone        TEXT             NOT NULL,
-  c_since        DATETIME         NOT NULL,
+  c_since        TIMESTAMP        NOT NULL,
   c_credit       TEXT             NOT NULL,
   c_credit_lim   DOUBLE PRECISION NOT NULL,
   c_discount     DOUBLE PRECISION NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE histories (
   h_c_w_id INTEGER          NOT NULL,
   h_d_id   INTEGER          NOT NULL,
   h_w_id   INTEGER          NOT NULL,
-  h_date   DATETIME         NOT NULL,
+  h_date   TIMESTAMP        NOT NULL,
   h_amount DOUBLE PRECISION NOT NULL,
   h_data   TEXT             NOT NULL,
   PRIMARY KEY (h_id),
@@ -105,14 +105,14 @@ CREATE TABLE stocks (
 );
 
 CREATE TABLE orders (
-  o_id         INTEGER  NOT NULL,
-  o_d_id       INTEGER  NOT NULL,
-  o_w_id       INTEGER  NOT NULL,
-  o_c_id       INTEGER  NOT NULL,
-  o_entry_d    DATETIME NOT NULL,
+  o_id         INTEGER   NOT NULL,
+  o_d_id       INTEGER   NOT NULL,
+  o_w_id       INTEGER   NOT NULL,
+  o_c_id       INTEGER   NOT NULL,
+  o_entry_d    TIMESTAMP NOT NULL,
   o_carrier_id INTEGER,
-  o_ol_cnt     INTEGER  NOT NULL,
-  o_all_local  INTEGER  NOT NULL,
+  o_ol_cnt     INTEGER   NOT NULL,
+  o_all_local  INTEGER   NOT NULL,
   PRIMARY KEY (o_w_id, o_d_id, o_id),
   FOREIGN KEY (o_w_id, o_d_id, o_c_id) REFERENCES customers (c_w_id, c_d_id, c_id)
 );
@@ -132,7 +132,7 @@ CREATE TABLE order_lines (
   ol_number      INTEGER          NOT NULL,
   ol_i_id        INTEGER          NOT NULL,
   ol_supply_w_id INTEGER          NOT NULL,
-  ol_delivery_d  DATETIME,
+  ol_delivery_d  TIMESTAMP,
   ol_quantity    INTEGER          NOT NULL,
   ol_amount      DOUBLE PRECISION NOT NULL,
   ol_dist_info   TEXT             NOT NULL,
