@@ -16,3 +16,11 @@ WSL2 , AmazonLinux 2023 on Windows Dev Kit 2023 (Snapdragon 8cx Gen3)
 | Postgres 15.4 |           2 |  2970 |
 | Postgres 15.4 |           4 |  4568 |
 | Postgres 15.4 |           8 |  6570 |
+
+
+AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (elastic throughput)
+
+| Database      | Concurrency |  TPM  |
+|:-------------:| -----------:| -----:|
+| SQLite 3.44.0 |           1 |    34 |
+
