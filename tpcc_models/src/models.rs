@@ -1,8 +1,12 @@
 use crate::{schema, DbConnection};
 use diesel::prelude::*;
 
+#[cfg(feature = "postgres")]
 const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    diesel_migrations::embed_migrations!("migrations");
+    diesel_migrations::embed_migrations!("migrations_pg");
+#[cfg(not(any(feature = "postgres")))]
+const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+    diesel_migrations::embed_migrations!("migrations_sqlite");
 
 /// Cleanup existing data
 pub fn cleanup(conn: &mut DbConnection) -> diesel::migration::Result<()> {
