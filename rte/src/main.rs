@@ -171,7 +171,7 @@ async fn run(args: RunArgs) -> Result<(), Error> {
 
     let total_counts = counts.into_iter().sum::<i32>();
     println!(
-        "{:.1} tpm = {} transactions / {:.3} secs",
+        "{:.1} tpm = {} new_order transactions in {:.3} secs",
         (total_counts as f32) * 60.0 / args.duration,
         total_counts,
         args.duration,
@@ -188,23 +188,44 @@ async fn benchmark_single_terminal(
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
 ) -> Result<i32, Error> {
-    let mut counts = 0;
+    let mut counts = 0u32;
+    let mut new_orders = 0;
     let mut rand = tpcc_rand::TpcRandom::new();
 
     while std::time::Instant::now() < term_t {
-        new_order_req(warehouse_id, &endpoints, &client, &mut rand).await?;
-        payment_req(warehouse_id, &endpoints, &client, &mut rand).await?;
-        order_status_req(warehouse_id, &endpoints, &client, &mut rand).await?;
-        delivery_req(warehouse_id, &endpoints, &client, &mut rand).await?;
-        stock_level_req(warehouse_id, &endpoints, &client, &mut rand).await?;
-
-        // only counts benchmark period (excludes ramp-up, ramp-down)
-        let now = std::time::Instant::now();
-        if start_t <= now && now < end_t {
-            counts += 1;
+        // 5.2.3
+        // Mix of each transaction
+        match counts % 25 {
+            0 | 2 | 4 | 6 | 9 | 11 | 13 | 15 | 18 | 20 | 22 => {
+                // 44%
+                new_order_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+                // Only count up in benchmark period (excludes ramp-up, ramp-down)
+                let now = std::time::Instant::now();
+                if start_t <= now && now < end_t {
+                    new_orders += 1;
+                }
+            }
+            1 | 3 | 5 | 7 | 10 | 12 | 14 | 16 | 19 | 21 | 23 => {
+                // 44%
+                payment_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+            }
+            8 => {
+                // 4%
+                order_status_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+            }
+            17 => {
+                // 4%
+                delivery_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+            }
+            24 => {
+                // 4%
+                stock_level_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+            }
+            _ => {}
         }
+        counts += 1
     }
-    Ok(counts)
+    Ok(new_orders)
 }
 
 /// New-Order Transaction
