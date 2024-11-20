@@ -24,6 +24,12 @@ AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (elastic throughput)
 |:-------------:| -----------:| -----:|
 | SQLite 3.44.0 |           1 |    45 |
 
+AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (burst throughput)
+
+| Database      | Concurrency |  TPM  |
+|:-------------:| -----------:| -----:|
+| SQLite 3.44.0 |           1 |    41 |
+
 
 ## Test results (without transaction)
 
