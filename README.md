@@ -2,7 +2,30 @@
 
 todo!()
 
-## Test results
+## Test results (with transaction)
+
+WSL2 , AmazonLinux 2023 on Windows Dev Kit 2023 (Snapdragon 8cx Gen3)
+
+| Database      | Concurrency |  TPM  |
+|:-------------:| -----------:| -----:|
+| SQLite 3.44.0 |           1 |  2403 |
+| SQLite 3.44.0 |           2 |  2717 |
+| SQLite 3.44.0 |           4 |  2611 |
+| SQLite 3.44.0 |           8 |  2554 |
+| Postgres 15.4 |           1 |  1317 |
+| Postgres 15.4 |           2 |   |
+| Postgres 15.4 |           4 |   |
+| Postgres 15.4 |           8 |   |
+
+
+AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (elastic throughput)
+
+| Database      | Concurrency |  TPM  |
+|:-------------:| -----------:| -----:|
+| SQLite 3.44.0 |           1 |    45 |
+
+
+## Test results (without transaction)
 
 WSL2 , AmazonLinux 2023 on Windows Dev Kit 2023 (Snapdragon 8cx Gen3)
 

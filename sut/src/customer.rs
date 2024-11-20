@@ -1,5 +1,6 @@
 use axum::extract;
 use if_types::CustomersResponse;
+use tpcc_models::Connection;
 
 /// for Debug
 pub(crate) async fn customer_by_id(
@@ -9,21 +10,23 @@ pub(crate) async fn customer_by_id(
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;
         let mut conn = pool.get()?;
-        // Search customer by ID
-        let db_customer =
-            tpcc_models::Customer::find(warehouse_id, district_id, customer_id, &mut conn)?;
+        conn.transaction(|conn| {
+            // Search customer by ID
+            let db_customer =
+                tpcc_models::Customer::find(warehouse_id, district_id, customer_id, conn)?;
 
-        // Re-share to response JSON type
-        let (warehouse_id, district_id, customer_id) = db_customer.id();
-        let customer = if_types::Customer {
-            warehouse_id,
-            district_id,
-            customer_id,
-            firstname: db_customer.firstname().to_string(),
-            lastname: db_customer.lastname().to_string(),
-        };
+            // Re-share to response JSON type
+            let (warehouse_id, district_id, customer_id) = db_customer.id();
+            let customer = if_types::Customer {
+                warehouse_id,
+                district_id,
+                customer_id,
+                firstname: db_customer.firstname().to_string(),
+                lastname: db_customer.lastname().to_string(),
+            };
 
-        Ok(axum::Json(customer))
+            Ok(axum::Json(customer))
+        })
     })
     .await?
 }
@@ -37,31 +40,32 @@ pub(crate) async fn customer_by_lastname(
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;
         let mut conn = pool.get()?;
+        conn.transaction(|conn| {
+            // Search customer by lastname
+            let db_customers = tpcc_models::Customer::find_by_name(
+                params.warehouse_id,
+                params.district_id,
+                &params.lastname,
+                conn,
+            )?;
 
-        // Search customer by lastname
-        let db_customers = tpcc_models::Customer::find_by_name(
-            params.warehouse_id,
-            params.district_id,
-            &params.lastname,
-            &mut conn,
-        )?;
+            // Re-share to response JSON type
+            let customers = db_customers
+                .iter()
+                .map(|c| {
+                    let (warehouse_id, district_id, customer_id) = c.id();
+                    if_types::Customer {
+                        warehouse_id,
+                        district_id,
+                        customer_id,
+                        firstname: c.firstname().to_string(),
+                        lastname: c.lastname().to_string(),
+                    }
+                })
+                .collect::<Vec<_>>();
 
-        // Re-share to response JSON type
-        let customers = db_customers
-            .iter()
-            .map(|c| {
-                let (warehouse_id, district_id, customer_id) = c.id();
-                if_types::Customer {
-                    warehouse_id,
-                    district_id,
-                    customer_id,
-                    firstname: c.firstname().to_string(),
-                    lastname: c.lastname().to_string(),
-                }
-            })
-            .collect::<Vec<_>>();
-
-        Ok(axum::Json(if_types::CustomersResponse { customers }))
+            Ok(axum::Json(if_types::CustomersResponse { customers }))
+        })
     })
     .await?
 }

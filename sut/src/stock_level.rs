@@ -1,5 +1,6 @@
 use axum::extract;
 use if_types::StockLevelResponse;
+use tpcc_models::Connection;
 
 /// Stock-Level Transaction
 /// TPC-C standard spec. 2.8
@@ -10,15 +11,16 @@ pub(crate) async fn check_stocks(
 ) -> Result<axum::response::Json<StockLevelResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = pool.get()?;
+        conn.transaction(|conn| {
+            let warehouse = tpcc_models::Warehouse::find(warehouse_id, conn)?;
+            let district = warehouse.find_district(district_id, conn)?;
 
-        let warehouse = tpcc_models::Warehouse::find(warehouse_id, &mut conn)?;
-        let district = warehouse.find_district(district_id, &mut conn)?;
+            let low_stocks = district.check_stock_level(params.stock_level, conn)?;
 
-        let low_stocks = district.check_stock_level(params.stock_level, &mut conn)?;
-
-        Ok(axum::Json(StockLevelResponse {
-            low_stocks: low_stocks as i32,
-        }))
+            Ok(axum::Json(StockLevelResponse {
+                low_stocks: low_stocks as i32,
+            }))
+        })
     })
     .await?
 }

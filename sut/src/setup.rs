@@ -1,21 +1,23 @@
 use axum::extract;
 use if_types::{DbStatusResponse, PrepareDbRequest};
+use tpcc_models::Connection;
 
 pub(crate) async fn status(
     extract::State(pool): extract::State<tpcc_models::Pool>,
 ) -> Result<axum::response::Json<DbStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = pool.get()?;
+        conn.transaction(|conn| {
+            let stat = DbStatusResponse {
+                warehouse_count: tpcc_models::Warehouse::count(conn)?,
+                district_count: tpcc_models::District::count(conn)?,
+                customer_count: tpcc_models::Customer::count(conn)?,
+                order_count: tpcc_models::Order::count(conn)?,
+                database_bytes: tpcc_models::database_size(conn)?,
+            };
 
-        let stat = DbStatusResponse {
-            warehouse_count: tpcc_models::Warehouse::count(&mut conn)?,
-            district_count: tpcc_models::District::count(&mut conn)?,
-            customer_count: tpcc_models::Customer::count(&mut conn)?,
-            order_count: tpcc_models::Order::count(&mut conn)?,
-            database_bytes: tpcc_models::database_size(&mut conn)?,
-        };
-
-        Ok(axum::response::Json(stat))
+            Ok(axum::response::Json(stat))
+        })
     })
     .await?
 }
@@ -27,23 +29,29 @@ pub(crate) async fn prepare_db(
 ) -> Result<axum::response::Json<DbStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = pool.get()?;
+        conn.transaction(|conn| -> Result<(), crate::Error> {
+            // Clean up database
+            tpcc_models::cleanup(conn).map_err(|e| crate::Error::migration_error(e))?;
+            // Setup schema (create table) and initial data
+            tpcc_models::prepare(params.scale_factor, conn)
+                .map_err(|e| crate::Error::migration_error(e))?;
+            Ok(())
+        })?;
 
-        // Clean up database
-        tpcc_models::cleanup(&mut conn).map_err(|e| crate::Error::migration_error(e))?;
-        // Setup schema (create table) and initial data
-        tpcc_models::prepare(params.scale_factor, &mut conn)
-            .map_err(|e| crate::Error::migration_error(e))?;
+        // Can not vacuum in transaction
         tpcc_models::vacuum(&mut conn)?;
 
-        let stat = DbStatusResponse {
-            warehouse_count: tpcc_models::Warehouse::count(&mut conn)?,
-            district_count: tpcc_models::District::count(&mut conn)?,
-            customer_count: tpcc_models::Customer::count(&mut conn)?,
-            order_count: tpcc_models::Order::count(&mut conn)?,
-            database_bytes: tpcc_models::database_size(&mut conn)?,
-        };
+        conn.transaction(|conn| {
+            let stat = DbStatusResponse {
+                warehouse_count: tpcc_models::Warehouse::count(conn)?,
+                district_count: tpcc_models::District::count(conn)?,
+                customer_count: tpcc_models::Customer::count(conn)?,
+                order_count: tpcc_models::Order::count(conn)?,
+                database_bytes: tpcc_models::database_size(conn)?,
+            };
 
-        Ok(axum::response::Json(stat))
+            Ok(axum::response::Json(stat))
+        })
     })
     .await?
 }
