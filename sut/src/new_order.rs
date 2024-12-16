@@ -10,8 +10,11 @@ pub(crate) async fn new_order(
 ) -> Result<axum::response::Json<NewOrderResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = pool.get()?;
-        conn.transaction(|conn| {
+        let t0 = std::time::Instant::now();
+        let (resp, t1, t2) = conn.transaction(|conn| {
             use tpcc_models::Warehouse;
+
+            let t1 = std::time::Instant::now();
             // Transaction described in TPC-C standard spec. 2.4.2
             let warehouse = Warehouse::find(params.warehouse_id, conn)?;
             let mut district = warehouse.find_district(params.district_id, conn)?;
@@ -46,8 +49,20 @@ pub(crate) async fn new_order(
                 total_amount,
             };
 
-            Ok(axum::Json(resp))
-        })
+            let t2 = std::time::Instant::now();
+            Ok::<_, crate::Error>((axum::Json(resp), t1, t2))
+        })?;
+
+        let t3 = std::time::Instant::now();
+        log::debug!(
+            "new_order() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+            (t1 - t0).as_secs_f32(),
+            (t2 - t1).as_secs_f32(),
+            (t3 - t2).as_secs_f32(),
+            (t3 - t0).as_secs_f32(),
+        );
+
+        Ok(resp)
     })
     .await?
 }

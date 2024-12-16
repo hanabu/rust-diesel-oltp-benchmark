@@ -6,7 +6,7 @@
 use sut::*;
 #[tokio::main]
 async fn main() -> Result<(), lambda_http::Error> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     // On lambda, single thread, single DB connection
     lambda_http::run(app(1).await).await?;

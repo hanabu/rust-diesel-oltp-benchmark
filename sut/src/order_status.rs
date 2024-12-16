@@ -9,7 +9,9 @@ pub(crate) async fn order_status(
 ) -> Result<axum::response::Json<if_types::OrderStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = pool.get()?;
-        conn.transaction(|conn| {
+        let t0 = std::time::Instant::now();
+        let (resp, t1, t2) = conn.transaction(|conn| {
+            let t1 = std::time::Instant::now();
             // Search customer by ID
             let customer =
                 tpcc_models::Customer::find(warehouse_id, district_id, customer_id, conn)?;
@@ -38,16 +40,37 @@ pub(crate) async fn order_status(
                         lines: lines,
                     };
 
-                    Ok(axum::Json(if_types::OrderStatusResponse {
-                        orders: vec![order],
-                    }))
+                    let t2 = std::time::Instant::now();
+                    Ok::<_, crate::Error>((
+                        axum::Json(if_types::OrderStatusResponse {
+                            orders: vec![order],
+                        }),
+                        t1,
+                        t2,
+                    ))
                 }
                 Err(tpcc_models::QueryError::NotFound) => {
-                    Ok(axum::Json(if_types::OrderStatusResponse { orders: vec![] }))
+                    let t2 = std::time::Instant::now();
+                    Ok((
+                        axum::Json(if_types::OrderStatusResponse { orders: vec![] }),
+                        t1,
+                        t2,
+                    ))
                 }
                 Err(e) => Err(e)?,
             }
-        })
+        })?;
+
+        let t3 = std::time::Instant::now();
+        log::debug!(
+            "order_status() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+            (t1 - t0).as_secs_f32(),
+            (t2 - t1).as_secs_f32(),
+            (t3 - t2).as_secs_f32(),
+            (t3 - t0).as_secs_f32(),
+        );
+
+        Ok(resp)
     })
     .await?
 }

@@ -10,7 +10,10 @@ pub(crate) async fn customer_by_id(
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;
         let mut conn = pool.get()?;
-        conn.transaction(|conn| {
+        let t0 = std::time::Instant::now();
+        let (resp, t1, t2) = conn.transaction(|conn| {
+            let t1 = std::time::Instant::now();
+
             // Search customer by ID
             let db_customer =
                 tpcc_models::Customer::find(warehouse_id, district_id, customer_id, conn)?;
@@ -25,8 +28,20 @@ pub(crate) async fn customer_by_id(
                 lastname: db_customer.lastname().to_string(),
             };
 
-            Ok(axum::Json(customer))
-        })
+            let t2 = std::time::Instant::now();
+            Ok::<_, crate::Error>((axum::Json(customer), t1, t2))
+        })?;
+
+        let t3 = std::time::Instant::now();
+        log::debug!(
+            "customer_by_id() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+            (t1 - t0).as_secs_f32(),
+            (t2 - t1).as_secs_f32(),
+            (t3 - t2).as_secs_f32(),
+            (t3 - t0).as_secs_f32(),
+        );
+
+        Ok(resp)
     })
     .await?
 }
@@ -40,7 +55,9 @@ pub(crate) async fn customer_by_lastname(
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;
         let mut conn = pool.get()?;
-        conn.transaction(|conn| {
+        let t0 = std::time::Instant::now();
+        let (resp, t1, t2) = conn.transaction(|conn| {
+            let t1 = std::time::Instant::now();
             // Search customer by lastname
             let db_customers = tpcc_models::Customer::find_by_name(
                 params.warehouse_id,
@@ -64,8 +81,23 @@ pub(crate) async fn customer_by_lastname(
                 })
                 .collect::<Vec<_>>();
 
-            Ok(axum::Json(if_types::CustomersResponse { customers }))
-        })
+            let t2 = std::time::Instant::now();
+            Ok::<_, crate::Error>((
+                axum::Json(if_types::CustomersResponse { customers }),
+                t1,
+                t2,
+            ))
+        })?;
+        let t3 = std::time::Instant::now();
+        log::debug!(
+            "customer_by_lastname() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+            (t1 - t0).as_secs_f32(),
+            (t2 - t1).as_secs_f32(),
+            (t3 - t2).as_secs_f32(),
+            (t3 - t0).as_secs_f32(),
+        );
+
+        Ok(resp)
     })
     .await?
 }
