@@ -5,11 +5,12 @@ use tpcc_models::Connection;
 /// Payment Transaction
 /// TPC-C standard spec. 2.4
 pub(crate) async fn payment(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Json(params): extract::Json<PaymentRequest>,
 ) -> Result<axum::response::Json<PaymentResponse>, crate::Error> {
+    use std::sync::atomic::Ordering::Relaxed;
     tokio::task::spawn_blocking(move || {
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
         let (resp, t1, t2) = conn.transaction(|conn| {
             let t1 = std::time::Instant::now();
@@ -46,6 +47,10 @@ pub(crate) async fn payment(
             (t3 - t2).as_secs_f32(),
             (t3 - t0).as_secs_f32(),
         );
+
+        let elapsed = (t3 - t0).as_micros() as usize;
+        state.statistics.payment_count.fetch_add(1, Relaxed);
+        state.statistics.payment_us.fetch_add(elapsed, Relaxed);
 
         Ok(resp)
     })

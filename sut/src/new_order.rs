@@ -5,11 +5,12 @@ use tpcc_models::Connection;
 /// New-Order Transaction
 /// TPC-C standard spec. 2.4
 pub(crate) async fn new_order(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Json(params): extract::Json<NewOrderRequest>,
 ) -> Result<axum::response::Json<NewOrderResponse>, crate::Error> {
+    use std::sync::atomic::Ordering::Relaxed;
     tokio::task::spawn_blocking(move || {
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
         let (resp, t1, t2) = conn.transaction(|conn| {
             use tpcc_models::Warehouse;
@@ -61,6 +62,10 @@ pub(crate) async fn new_order(
             (t3 - t2).as_secs_f32(),
             (t3 - t0).as_secs_f32(),
         );
+
+        let elapsed = (t3 - t0).as_micros() as usize;
+        state.statistics.new_order_count.fetch_add(1, Relaxed);
+        state.statistics.new_order_us.fetch_add(elapsed, Relaxed);
 
         Ok(resp)
     })

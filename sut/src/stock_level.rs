@@ -5,12 +5,13 @@ use tpcc_models::Connection;
 /// Stock-Level Transaction
 /// TPC-C standard spec. 2.8
 pub(crate) async fn check_stocks(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Path((warehouse_id, district_id)): extract::Path<(i32, i32)>,
     extract::Query(params): extract::Query<if_types::StockLevelParams>,
 ) -> Result<axum::response::Json<StockLevelResponse>, crate::Error> {
+    use std::sync::atomic::Ordering::Relaxed;
     tokio::task::spawn_blocking(move || {
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
         let (resp, t1, t2) = conn.transaction(|conn| {
             let t1 = std::time::Instant::now();
@@ -36,6 +37,10 @@ pub(crate) async fn check_stocks(
             (t3 - t2).as_secs_f32(),
             (t3 - t0).as_secs_f32(),
         );
+
+        let elapsed = (t3 - t0).as_micros() as usize;
+        state.statistics.stock_level_count.fetch_add(1, Relaxed);
+        state.statistics.stock_level_us.fetch_add(elapsed, Relaxed);
 
         Ok(resp)
     })

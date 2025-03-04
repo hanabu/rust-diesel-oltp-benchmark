@@ -3,10 +3,10 @@ use if_types::{DbStatusResponse, PrepareDbRequest};
 use tpcc_models::Connection;
 
 pub(crate) async fn status(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
 ) -> Result<axum::response::Json<DbStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         conn.transaction(|conn| {
             let stat = DbStatusResponse {
                 warehouse_count: tpcc_models::Warehouse::count(conn)?,
@@ -14,6 +14,7 @@ pub(crate) async fn status(
                 customer_count: tpcc_models::Customer::count(conn)?,
                 order_count: tpcc_models::Order::count(conn)?,
                 database_bytes: tpcc_models::database_size(conn)?,
+                statistics: state.statistics.to_iftype(),
             };
 
             Ok(axum::response::Json(stat))
@@ -24,11 +25,11 @@ pub(crate) async fn status(
 
 /// Setup initial database
 pub(crate) async fn prepare_db(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Json(params): extract::Json<PrepareDbRequest>,
 ) -> Result<axum::response::Json<DbStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         conn.transaction(|conn| -> Result<(), crate::Error> {
             // Clean up database
             tpcc_models::cleanup(conn).map_err(|e| crate::Error::migration_error(e))?;
@@ -48,6 +49,7 @@ pub(crate) async fn prepare_db(
                 customer_count: tpcc_models::Customer::count(conn)?,
                 order_count: tpcc_models::Order::count(conn)?,
                 database_bytes: tpcc_models::database_size(conn)?,
+                statistics: state.statistics.to_iftype(),
             };
 
             Ok(axum::response::Json(stat))

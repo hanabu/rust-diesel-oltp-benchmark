@@ -133,4 +133,23 @@ pub struct DbStatusResponse {
     pub customer_count: i64,
     pub order_count: i64,
     pub database_bytes: i64,
+    pub statistics: Statistics,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct Statistics {
+    pub new_order_count: i64,
+    pub new_order_secs: f64,
+    pub payment_count: i64,
+    pub payment_secs: f64,
+    pub order_status_count: i64,
+    pub order_status_secs: f64,
+    pub delivery_count: i64,
+    pub delivery_secs: f64,
+    pub stock_level_count: i64,
+    pub stock_level_secs: f64,
+    pub customer_by_id_count: i64,
+    pub customer_by_id_secs: f64,
+    pub customer_by_name_count: i64,
+    pub customer_by_name_secs: f64,
 }

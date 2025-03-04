@@ -4,12 +4,13 @@ use tpcc_models::Connection;
 
 /// for Debug
 pub(crate) async fn customer_by_id(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Path((warehouse_id, district_id, customer_id)): extract::Path<(i32, i32, i32)>,
 ) -> Result<axum::response::Json<if_types::Customer>, crate::Error> {
+    use std::sync::atomic::Ordering::Relaxed;
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
         let (resp, t1, t2) = conn.transaction(|conn| {
             let t1 = std::time::Instant::now();
@@ -41,6 +42,13 @@ pub(crate) async fn customer_by_id(
             (t3 - t0).as_secs_f32(),
         );
 
+        let elapsed = (t3 - t0).as_micros() as usize;
+        state.statistics.customer_by_id_count.fetch_add(1, Relaxed);
+        state
+            .statistics
+            .customer_by_id_us
+            .fetch_add(elapsed, Relaxed);
+
         Ok(resp)
     })
     .await?
@@ -49,12 +57,13 @@ pub(crate) async fn customer_by_id(
 /// Customer by last name, used in Payment, Order-Status Transaction
 /// TPC-C standard spec. 2.5, 2.6
 pub(crate) async fn customer_by_lastname(
-    extract::State(pool): extract::State<tpcc_models::Pool>,
+    extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Query(params): extract::Query<if_types::CustomersByLastnameParams>,
 ) -> Result<axum::response::Json<CustomersResponse>, crate::Error> {
+    use std::sync::atomic::Ordering::Relaxed;
     tokio::task::spawn_blocking(move || {
         //use tpcc_models::Warehouse;
-        let mut conn = pool.get()?;
+        let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
         let (resp, t1, t2) = conn.transaction(|conn| {
             let t1 = std::time::Instant::now();
@@ -96,6 +105,16 @@ pub(crate) async fn customer_by_lastname(
             (t3 - t2).as_secs_f32(),
             (t3 - t0).as_secs_f32(),
         );
+
+        let elapsed = (t3 - t0).as_micros() as usize;
+        state
+            .statistics
+            .customer_by_name_count
+            .fetch_add(1, Relaxed);
+        state
+            .statistics
+            .customer_by_name_us
+            .fetch_add(elapsed, Relaxed);
 
         Ok(resp)
     })

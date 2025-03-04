@@ -16,6 +16,10 @@ pub async fn app(db_connectinos: u32) -> axum::Router {
     let db_url = std::env::var("DATABASE_URL").unwrap_or("tpc_c.sqlite".to_string());
     let pool = tpcc_models::pool(&db_url, db_connectinos)
         .expect(&format!("Can not open database {}", db_url));
+    let app_state = std::sync::Arc::new(AppState {
+        pool,
+        statistics: Statistics::default(),
+    });
 
     axum::Router::new()
         .route("/orders", post(new_order::new_order))
@@ -36,7 +40,54 @@ pub async fn app(db_connectinos: u32) -> axum::Router {
         )
         .route("/prepare_db", post(setup::prepare_db))
         .route("/", get(setup::status))
-        .with_state(pool)
+        .with_state(app_state)
+}
+
+struct AppState {
+    pool: tpcc_models::Pool,
+    statistics: Statistics,
+}
+
+/// Benchmark performance statistics
+#[derive(Default)]
+struct Statistics {
+    new_order_count: std::sync::atomic::AtomicUsize,
+    new_order_us: std::sync::atomic::AtomicUsize,
+    payment_count: std::sync::atomic::AtomicUsize,
+    payment_us: std::sync::atomic::AtomicUsize,
+    order_status_count: std::sync::atomic::AtomicUsize,
+    order_status_us: std::sync::atomic::AtomicUsize,
+    delivery_count: std::sync::atomic::AtomicUsize,
+    delivery_us: std::sync::atomic::AtomicUsize,
+    stock_level_count: std::sync::atomic::AtomicUsize,
+    stock_level_us: std::sync::atomic::AtomicUsize,
+    customer_by_id_count: std::sync::atomic::AtomicUsize,
+    customer_by_id_us: std::sync::atomic::AtomicUsize,
+    customer_by_name_count: std::sync::atomic::AtomicUsize,
+    customer_by_name_us: std::sync::atomic::AtomicUsize,
+}
+
+impl Statistics {
+    fn to_iftype(&self) -> if_types::Statistics {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        if_types::Statistics {
+            new_order_count: self.new_order_count.load(Relaxed) as i64,
+            new_order_secs: 0.000001 * self.new_order_us.load(Relaxed) as f64,
+            payment_count: self.payment_count.load(Relaxed) as i64,
+            payment_secs: 0.000001 * self.payment_us.load(Relaxed) as f64,
+            order_status_count: self.order_status_count.load(Relaxed) as i64,
+            order_status_secs: 0.000001 * self.order_status_us.load(Relaxed) as f64,
+            delivery_count: self.delivery_count.load(Relaxed) as i64,
+            delivery_secs: 0.000001 * self.delivery_us.load(Relaxed) as f64,
+            stock_level_count: self.stock_level_count.load(Relaxed) as i64,
+            stock_level_secs: 0.000001 * self.stock_level_us.load(Relaxed) as f64,
+            customer_by_id_count: self.customer_by_id_count.load(Relaxed) as i64,
+            customer_by_id_secs: 0.000001 * self.customer_by_id_us.load(Relaxed) as f64,
+            customer_by_name_count: self.customer_by_name_count.load(Relaxed) as i64,
+            customer_by_name_secs: 0.000001 * self.customer_by_name_us.load(Relaxed) as f64,
+        }
+    }
 }
 
 /// Error type in request handler
