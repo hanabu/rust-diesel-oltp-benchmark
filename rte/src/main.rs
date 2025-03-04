@@ -97,6 +97,9 @@ impl EndpointUrls {
     pub fn customer_by_lastname(&self) -> url::Url {
         self.customer.clone()
     }
+    pub fn status(&self) -> url::Url {
+        self.base.clone()
+    }
 }
 
 #[tokio::main]
@@ -175,6 +178,43 @@ async fn run(args: RunArgs) -> Result<(), Error> {
         (total_counts as f32) * 60.0 / args.duration,
         total_counts,
         args.duration,
+    );
+
+    let st = status(&endpoints, &client).await?.statistics;
+    println!(
+        "new_order:        {:5} calls, {:.03}s/call",
+        st.new_order_count,
+        st.new_order_secs / st.new_order_count as f64
+    );
+    println!(
+        "payment:          {:5} calls, {:.03}s/call",
+        st.payment_count,
+        st.payment_secs / st.payment_count as f64
+    );
+    println!(
+        "order_status:     {:5} calls, {:.03}s/call",
+        st.order_status_count,
+        st.order_status_secs / st.order_status_count as f64
+    );
+    println!(
+        "delivery:         {:5} calls, {:.03}s/call",
+        st.delivery_count,
+        st.delivery_secs / st.delivery_count as f64
+    );
+    println!(
+        "stock_level:      {:5} calls, {:.03}s/call",
+        st.stock_level_count,
+        st.stock_level_secs / st.stock_level_count as f64
+    );
+    println!(
+        "customer_by_id:   {:5} calls, {:.03}s/call",
+        st.customer_by_id_count,
+        st.customer_by_id_secs / st.customer_by_id_count as f64
+    );
+    println!(
+        "customer_by_name: {:5} calls, {:.03}s/call",
+        st.customer_by_name_count,
+        st.customer_by_name_secs / st.customer_by_name_count as f64
     );
 
     Ok(())
@@ -448,4 +488,16 @@ async fn customer_id_by_lastname(
     log::debug!("Customer by lastname in {:.03}s", t.elapsed().as_secs_f32());
 
     Ok(customer.customer_id)
+}
+
+/// Query benchmark status
+async fn status(
+    endpoints: &EndpointUrls,
+    client: &reqwest::Client,
+) -> Result<if_types::DbStatusResponse, Error> {
+    let resp = client.get(endpoints.status()).send().await?;
+
+    let status = resp.json::<if_types::DbStatusResponse>().await?;
+
+    Ok(status)
 }
