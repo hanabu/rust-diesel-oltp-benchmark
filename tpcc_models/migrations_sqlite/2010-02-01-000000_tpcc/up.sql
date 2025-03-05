@@ -11,7 +11,7 @@ CREATE TABLE warehouses (
   w_tax      DOUBLE PRECISION NOT NULL,
   w_ytd      DOUBLE PRECISION NOT NULL,
   PRIMARY KEY (w_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE districts (
   d_id        INTEGER          NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE districts (
   d_next_o_id INTEGER          NOT NULL,
   PRIMARY KEY (d_w_id, d_id),
   FOREIGN KEY (d_w_id) REFERENCES warehouses (w_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE customers (
   c_id           INTEGER          NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE customers (
   c_data         TEXT             NOT NULL,
   PRIMARY KEY (c_w_id, c_d_id, c_id),
   FOREIGN KEY (c_w_id,c_d_id) REFERENCES districts (d_w_id,d_id)
-);
+)WITHOUT ROWID;
 
 CREATE INDEX idx_customer_lastname ON customers (c_w_id, c_d_id, c_last);
 
@@ -70,7 +70,7 @@ CREATE TABLE histories (
   PRIMARY KEY (h_id),
   FOREIGN KEY (h_c_w_id, h_c_d_id, h_c_id) REFERENCES customers (c_w_id, c_d_id, c_id),
   FOREIGN KEY (h_w_id, h_d_id)             REFERENCES districts (d_w_id, d_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE items (
   i_id     INTEGER          NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE items (
   i_price  DOUBLE PRECISION NOT NULL,
   i_data   TEXT             NOT NULL,
   PRIMARY KEY(i_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE stocks (
   s_i_id        INTEGER  NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE stocks (
   PRIMARY KEY (s_w_id, s_i_id),
   FOREIGN KEY (s_w_id) REFERENCES warehouses (w_id),
   FOREIGN KEY (s_i_id) REFERENCES items (i_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE orders (
   o_id         INTEGER   NOT NULL,
@@ -115,7 +115,7 @@ CREATE TABLE orders (
   o_all_local  INTEGER   NOT NULL,
   PRIMARY KEY (o_w_id, o_d_id, o_id),
   FOREIGN KEY (o_w_id, o_d_id, o_c_id) REFERENCES customers (c_w_id, c_d_id, c_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE new_orders (
   no_o_id  INTEGER  NOT NULL,
@@ -123,7 +123,7 @@ CREATE TABLE new_orders (
   no_w_id  INTEGER  NOT NULL,
   PRIMARY KEY (no_w_id, no_d_id, no_o_id),
   FOREIGN KEY (no_w_id, no_d_id, no_o_id)  REFERENCES orders(o_w_id, o_d_id, o_id)
-);
+)WITHOUT ROWID;
 
 CREATE TABLE order_lines (
   ol_o_id        INTEGER          NOT NULL,
@@ -139,5 +139,5 @@ CREATE TABLE order_lines (
   PRIMARY KEY (ol_w_id, ol_d_id, ol_o_id, ol_number),
   FOREIGN KEY (ol_w_id, ol_d_id, ol_o_id) REFERENCES orders(o_w_id, o_d_id, o_id),
   FOREIGN KEY (ol_supply_w_id, ol_i_id) REFERENCES stocks(s_w_id, s_i_id)
-);
+)WITHOUT ROWID;
 
