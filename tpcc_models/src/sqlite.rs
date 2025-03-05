@@ -35,6 +35,8 @@ fn setup_conn(conn: &mut DbConnection) -> QueryResult<()> {
     use diesel::connection::SimpleConnection;
     // SQLite on NFS can not use WAL, set journal_mode as default DELETE mode
     conn.batch_execute("PRAGMA journal_mode = DELETE;")?;
+    // Enlarge buffer size to 32MiB
+    conn.batch_execute("PRAGMA cache_size = -32768;")?;
     // Force foreign key constraint
     conn.batch_execute("PRAGMA foreign_keys = ON;")?;
     // Timeout

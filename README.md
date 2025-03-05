@@ -30,6 +30,12 @@ AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (burst throughput)
 |:-------------:| -----------:| -----:|
 | SQLite 3.44.0 |           1 |    41 |
 
+AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (burst throughput), PRAGMA cache_size = -32768;
+
+| Database      | Concurrency |  TPM  |
+|:-------------:| -----------:| -----:|
+| SQLite 3.48.0 |           1 |   132 |
+
 
 ## Test results (without transaction)
 
