@@ -207,11 +207,6 @@ async fn run(args: RunArgs) -> Result<(), Error> {
         st.stock_level_secs / st.stock_level_count as f64
     );
     println!(
-        "customer_by_id:   {:5} calls, {:.03}s/call",
-        st.customer_by_id_count,
-        st.customer_by_id_secs / st.customer_by_id_count as f64
-    );
-    println!(
         "customer_by_name: {:5} calls, {:.03}s/call",
         st.customer_by_name_count,
         st.customer_by_name_secs / st.customer_by_name_count as f64
