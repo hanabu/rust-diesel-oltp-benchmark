@@ -7,13 +7,14 @@ publish = false
 
 [features]
 default = ["sqlite"]
-postgres = ["diesel/postgres"]
+postgres = ["diesel/postgres", "dep:pq-sys"]
 sqlite = ["dep:libsqlite3-sys", "diesel/sqlite"]
 
 [dependencies]
 chrono.workspace = true
 diesel = { version="2", default-features=false, features=["32-column-tables", "chrono", "numeric", "r2d2", "returning_clauses_for_sqlite_3_35"] }
-diesel_migrations = { version = "2" }
-libsqlite3-sys = { version = "0.31", features= ["bundled"], optional=true }
+diesel_migrations = { version="2" }
+libsqlite3-sys = { version="0.31", features=["bundled"], optional=true }
+pq-sys = { version="0.6", features=["bundled"], optional=true }
 log.workspace = true
 tpcc_rand = { path="../tpcc_rand" }
