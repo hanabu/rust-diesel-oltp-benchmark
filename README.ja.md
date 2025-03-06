@@ -62,7 +62,7 @@ customer_by_name:   584 calls, 0.002s/call
 
 ## SQLite on EFS
 
-PC の local SSD で SQLite を走らせることに比べて、network file system である EFS で走らせた場合、1/10 ～ 1/20 程度の性能。比較すると遅いが、使えなくはないレベル感。
+SSD を載せた PC 上で走らせること比較して、network file system である EFS で走らせた場合、1/10 ～ 1/20 程度の性能。比較すると遅いが、使えなくはないレベル感。
 
 ```
 126.0 tpm = 126 new_order transactions in 60.000 secs
@@ -74,12 +74,12 @@ stock_level:        130 calls, 0.061s/call
 customer_by_name:    85 calls, 0.045s/call
 ```
 
-Benchmark 実行 70秒間で 517 requests, EFS burst credit を 102.3MB 消費。SQLite database の file size は 約90MB。
+Benchmark 実行 70秒間で 442 transactions, EFS burst credit を 102.3MB 消費。SQLite database の file size は 約90MB。
 
-条件は以下
+条件は以下:
 
 - AWS ap-northeast-1 Tokyo region
-- SUTの実行環境 : AWS Lambda Arm64, 1792MB, 
+- SUTの実行環境 : AWS Lambda Arm64, 1792MB, AmazonLinux 2023 runtime
 - RTEの設定 : Scale factor=1, 1並列
 - EFS: burst throughput mode
 - SQLite-3.48.0, Diesel-2.2.8, Rust-1.85.0
@@ -88,3 +88,4 @@ Benchmark 実行 70秒間で 517 requests, EFS burst credit を 102.3MB 消費�
 
 - [WAL mode](https://www.sqlite.org/wal.html) は使用できない。WAL は mmap による共有 memory を必要とするが、NFS では利用できないため。WAL mode で使うと SQLite file が壊れるため `PRAGMA journal_mode = DELETE;` で利用する。
 - [cache size](https://www.sqlite.org/pragma.html#pragma_cache_size) は大きくしたほうが良い。上記の TPC-C benchmark では cache size 2MB -> 32MiB で 約40tpm -> 約120tpm へ改善。
+- 複数の query を `BEGIN TRANSACTION; ... COMMIT;` にまとめる。File lock が transaction 単位にまとめて 1回 で済む。EFS は network 経由で file lock のため遅延が大きく、file lock 回数削減は性能に影響が出やすい。
