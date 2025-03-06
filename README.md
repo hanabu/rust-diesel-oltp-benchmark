@@ -1,3 +1,6 @@
+[![en](https://img.shields.io/badge/lang-en-blue.svg)](README.md)
+[![ja](https://img.shields.io/badge/lang-ja-green.svg)](README.ja.md)
+
 # TPC-C like database benchmark written in Rust Diesel ORM
 
 todo!()
@@ -58,4 +61,3 @@ AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (elastic throughput)
 | Database      | Concurrency |  TPM  |
 |:-------------:| -----------:| -----:|
 | SQLite 3.44.0 |           1 |    34 |
-
