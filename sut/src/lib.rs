@@ -4,9 +4,10 @@ mod new_order;
 mod order_status;
 mod payment;
 mod setup;
+mod spawn_transaction;
 mod stock_level;
 
-// pub type Error = Box<(dyn std::error::Error + Send + Sync + 'static)>;
+use spawn_transaction::SpawnTransaction;
 
 /// Initialize & build Axum route
 pub async fn app(db_connectinos: u32) -> axum::Router {

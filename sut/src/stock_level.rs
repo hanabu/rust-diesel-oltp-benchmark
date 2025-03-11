@@ -1,6 +1,6 @@
+use crate::SpawnTransaction;
 use axum::extract;
 use if_types::StockLevelResponse;
-use tpcc_models::RwTransaction;
 
 /// Stock-Level Transaction
 /// TPC-C standard spec. 2.8
@@ -10,10 +10,10 @@ pub(crate) async fn check_stocks(
     extract::Query(params): extract::Query<if_types::StockLevelParams>,
 ) -> Result<axum::response::Json<StockLevelResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    tokio::task::spawn_blocking(move || {
-        let mut conn = state.pool.get()?;
-        let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.read_transaction(|conn| {
+    let t0 = std::time::Instant::now();
+    let (resp, t1, t2) = state
+        .pool
+        .spawn_read_transaction(move |conn| {
             let t1 = std::time::Instant::now();
             let warehouse = tpcc_models::Warehouse::find(warehouse_id, conn)?;
             let district = warehouse.find_district(district_id, conn)?;
@@ -28,21 +28,20 @@ pub(crate) async fn check_stocks(
                 t1,
                 t2,
             ))
-        })?;
-        let t3 = std::time::Instant::now();
-        log::debug!(
-            "check_stocks() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-            (t1 - t0).as_secs_f32(),
-            (t2 - t1).as_secs_f32(),
-            (t3 - t2).as_secs_f32(),
-            (t3 - t0).as_secs_f32(),
-        );
+        })
+        .await?;
+    let t3 = std::time::Instant::now();
+    log::debug!(
+        "check_stocks() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+        (t1 - t0).as_secs_f32(),
+        (t2 - t1).as_secs_f32(),
+        (t3 - t2).as_secs_f32(),
+        (t3 - t0).as_secs_f32(),
+    );
 
-        let elapsed = (t3 - t0).as_micros() as usize;
-        state.statistics.stock_level_count.fetch_add(1, Relaxed);
-        state.statistics.stock_level_us.fetch_add(elapsed, Relaxed);
+    let elapsed = (t3 - t0).as_micros() as usize;
+    state.statistics.stock_level_count.fetch_add(1, Relaxed);
+    state.statistics.stock_level_us.fetch_add(elapsed, Relaxed);
 
-        Ok(resp)
-    })
-    .await?
+    Ok(resp)
 }

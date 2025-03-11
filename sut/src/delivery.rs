@@ -1,6 +1,6 @@
+use crate::SpawnTransaction;
 use axum::extract;
 use if_types::{DeliveryRequest, DeliveryResponse};
-use tpcc_models::RwTransaction;
 
 /// New-Order Transaction
 /// TPC-C standard spec. 2.4
@@ -9,10 +9,10 @@ pub(crate) async fn delivery(
     extract::Json(params): extract::Json<DeliveryRequest>,
 ) -> Result<axum::response::Json<DeliveryResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    tokio::task::spawn_blocking(move || {
-        let mut conn = state.pool.get()?;
-        let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.write_transaction(|conn| {
+    let t0 = std::time::Instant::now();
+    let (resp, t1, t2) = state
+        .pool
+        .spawn_write_transaction(move |conn| {
             let t1 = std::time::Instant::now();
             let warehouse = tpcc_models::Warehouse::find(params.warehouse_id, conn)?;
             let districts = warehouse.all_districts(conn)?;
@@ -31,22 +31,21 @@ pub(crate) async fn delivery(
                 t1,
                 t2,
             ))
-        })?;
+        })
+        .await?;
 
-        let t3 = std::time::Instant::now();
-        log::debug!(
-            "delivery() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-            (t1 - t0).as_secs_f32(),
-            (t2 - t1).as_secs_f32(),
-            (t3 - t2).as_secs_f32(),
-            (t3 - t0).as_secs_f32(),
-        );
+    let t3 = std::time::Instant::now();
+    log::debug!(
+        "delivery() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+        (t1 - t0).as_secs_f32(),
+        (t2 - t1).as_secs_f32(),
+        (t3 - t2).as_secs_f32(),
+        (t3 - t0).as_secs_f32(),
+    );
 
-        let elapsed = (t3 - t0).as_micros() as usize;
-        state.statistics.delivery_count.fetch_add(1, Relaxed);
-        state.statistics.delivery_us.fetch_add(elapsed, Relaxed);
+    let elapsed = (t3 - t0).as_micros() as usize;
+    state.statistics.delivery_count.fetch_add(1, Relaxed);
+    state.statistics.delivery_us.fetch_add(elapsed, Relaxed);
 
-        Ok(resp)
-    })
-    .await?
+    Ok(resp)
 }

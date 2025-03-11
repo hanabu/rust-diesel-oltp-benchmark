@@ -1,5 +1,5 @@
+use crate::SpawnTransaction;
 use axum::extract;
-use tpcc_models::RwTransaction;
 
 /// Order-Status Transaction
 /// TPC-C standard spec. 2.6
@@ -8,10 +8,10 @@ pub(crate) async fn order_status(
     extract::Path((warehouse_id, district_id, customer_id)): extract::Path<(i32, i32, i32)>,
 ) -> Result<axum::response::Json<if_types::OrderStatusResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    tokio::task::spawn_blocking(move || {
-        let mut conn = state.pool.get()?;
-        let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.read_transaction(|conn| {
+    let t0 = std::time::Instant::now();
+    let (resp, t1, t2) = state
+        .pool
+        .spawn_read_transaction(move |conn| {
             let t1 = std::time::Instant::now();
             // Search customer by ID
             let customer =
@@ -60,22 +60,21 @@ pub(crate) async fn order_status(
                 }
                 Err(e) => Err(e)?,
             }
-        })?;
+        })
+        .await?;
 
-        let t3 = std::time::Instant::now();
-        log::debug!(
-            "order_status() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-            (t1 - t0).as_secs_f32(),
-            (t2 - t1).as_secs_f32(),
-            (t3 - t2).as_secs_f32(),
-            (t3 - t0).as_secs_f32(),
-        );
+    let t3 = std::time::Instant::now();
+    log::debug!(
+        "order_status() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+        (t1 - t0).as_secs_f32(),
+        (t2 - t1).as_secs_f32(),
+        (t3 - t2).as_secs_f32(),
+        (t3 - t0).as_secs_f32(),
+    );
 
-        let elapsed = (t3 - t0).as_micros() as usize;
-        state.statistics.order_status_count.fetch_add(1, Relaxed);
-        state.statistics.order_status_us.fetch_add(elapsed, Relaxed);
+    let elapsed = (t3 - t0).as_micros() as usize;
+    state.statistics.order_status_count.fetch_add(1, Relaxed);
+    state.statistics.order_status_us.fetch_add(elapsed, Relaxed);
 
-        Ok(resp)
-    })
-    .await?
+    Ok(resp)
 }

@@ -1,6 +1,6 @@
+use crate::SpawnTransaction;
 use axum::extract;
 use if_types::CustomersResponse;
-use tpcc_models::RwTransaction;
 
 /// for Debug
 pub(crate) async fn customer_by_id(
@@ -8,11 +8,11 @@ pub(crate) async fn customer_by_id(
     extract::Path((warehouse_id, district_id, customer_id)): extract::Path<(i32, i32, i32)>,
 ) -> Result<axum::response::Json<if_types::Customer>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    tokio::task::spawn_blocking(move || {
-        //use tpcc_models::Warehouse;
-        let mut conn = state.pool.get()?;
-        let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.read_transaction(|conn| {
+
+    let t0 = std::time::Instant::now();
+    let (resp, t1, t2) = state
+        .pool
+        .spawn_read_transaction(move |conn| {
             let t1 = std::time::Instant::now();
 
             // Search customer by ID
@@ -31,27 +31,26 @@ pub(crate) async fn customer_by_id(
 
             let t2 = std::time::Instant::now();
             Ok::<_, crate::Error>((axum::Json(customer), t1, t2))
-        })?;
+        })
+        .await?;
 
-        let t3 = std::time::Instant::now();
-        log::debug!(
-            "customer_by_id() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-            (t1 - t0).as_secs_f32(),
-            (t2 - t1).as_secs_f32(),
-            (t3 - t2).as_secs_f32(),
-            (t3 - t0).as_secs_f32(),
-        );
+    let t3 = std::time::Instant::now();
+    log::debug!(
+        "customer_by_id() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+        (t1 - t0).as_secs_f32(),
+        (t2 - t1).as_secs_f32(),
+        (t3 - t2).as_secs_f32(),
+        (t3 - t0).as_secs_f32(),
+    );
 
-        let elapsed = (t3 - t0).as_micros() as usize;
-        state.statistics.customer_by_id_count.fetch_add(1, Relaxed);
-        state
-            .statistics
-            .customer_by_id_us
-            .fetch_add(elapsed, Relaxed);
+    let elapsed = (t3 - t0).as_micros() as usize;
+    state.statistics.customer_by_id_count.fetch_add(1, Relaxed);
+    state
+        .statistics
+        .customer_by_id_us
+        .fetch_add(elapsed, Relaxed);
 
-        Ok(resp)
-    })
-    .await?
+    Ok(resp)
 }
 
 /// Customer by last name, used in Payment, Order-Status Transaction
@@ -61,11 +60,10 @@ pub(crate) async fn customer_by_lastname(
     extract::Query(params): extract::Query<if_types::CustomersByLastnameParams>,
 ) -> Result<axum::response::Json<CustomersResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    tokio::task::spawn_blocking(move || {
-        //use tpcc_models::Warehouse;
-        let mut conn = state.pool.get()?;
-        let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.read_transaction(|conn| {
+    let t0 = std::time::Instant::now();
+    let (resp, t1, t2) = state
+        .pool
+        .spawn_read_transaction(move |conn| {
             let t1 = std::time::Instant::now();
             // Search customer by lastname
             let db_customers = tpcc_models::Customer::find_by_name(
@@ -96,27 +94,27 @@ pub(crate) async fn customer_by_lastname(
                 t1,
                 t2,
             ))
-        })?;
-        let t3 = std::time::Instant::now();
-        log::debug!(
-            "customer_by_lastname() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-            (t1 - t0).as_secs_f32(),
-            (t2 - t1).as_secs_f32(),
-            (t3 - t2).as_secs_f32(),
-            (t3 - t0).as_secs_f32(),
-        );
+        })
+        .await?;
 
-        let elapsed = (t3 - t0).as_micros() as usize;
-        state
-            .statistics
-            .customer_by_name_count
-            .fetch_add(1, Relaxed);
-        state
-            .statistics
-            .customer_by_name_us
-            .fetch_add(elapsed, Relaxed);
+    let t3 = std::time::Instant::now();
+    log::debug!(
+        "customer_by_lastname() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
+        (t1 - t0).as_secs_f32(),
+        (t2 - t1).as_secs_f32(),
+        (t3 - t2).as_secs_f32(),
+        (t3 - t0).as_secs_f32(),
+    );
 
-        Ok(resp)
-    })
-    .await?
+    let elapsed = (t3 - t0).as_micros() as usize;
+    state
+        .statistics
+        .customer_by_name_count
+        .fetch_add(1, Relaxed);
+    state
+        .statistics
+        .customer_by_name_us
+        .fetch_add(elapsed, Relaxed);
+
+    Ok(resp)
 }
