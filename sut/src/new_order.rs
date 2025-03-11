@@ -1,6 +1,6 @@
 use axum::extract;
 use if_types::{NewOrderRequest, NewOrderResponse};
-use tpcc_models::Connection;
+use tpcc_models::RwTransaction;
 
 /// New-Order Transaction
 /// TPC-C standard spec. 2.4
@@ -12,7 +12,7 @@ pub(crate) async fn new_order(
     tokio::task::spawn_blocking(move || {
         let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.transaction(|conn| {
+        let (resp, t1, t2) = conn.write_transaction(|conn| {
             use tpcc_models::Warehouse;
 
             let t1 = std::time::Instant::now();

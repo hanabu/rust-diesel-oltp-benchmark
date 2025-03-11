@@ -1,6 +1,6 @@
 use axum::extract;
 use if_types::{DeliveryRequest, DeliveryResponse};
-use tpcc_models::Connection;
+use tpcc_models::RwTransaction;
 
 /// New-Order Transaction
 /// TPC-C standard spec. 2.4
@@ -12,7 +12,7 @@ pub(crate) async fn delivery(
     tokio::task::spawn_blocking(move || {
         let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.transaction(|conn| {
+        let (resp, t1, t2) = conn.write_transaction(|conn| {
             let t1 = std::time::Instant::now();
             let warehouse = tpcc_models::Warehouse::find(params.warehouse_id, conn)?;
             let districts = warehouse.all_districts(conn)?;

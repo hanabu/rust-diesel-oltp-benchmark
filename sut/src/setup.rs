@@ -1,13 +1,13 @@
 use axum::extract;
 use if_types::{DbStatusResponse, PrepareDbRequest};
-use tpcc_models::Connection;
+use tpcc_models::RwTransaction;
 
 pub(crate) async fn status(
     extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
 ) -> Result<axum::response::Json<DbStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = state.pool.get()?;
-        conn.transaction(|conn| {
+        conn.read_transaction(|conn| {
             let stat = DbStatusResponse {
                 warehouse_count: tpcc_models::Warehouse::count(conn)?,
                 district_count: tpcc_models::District::count(conn)?,
@@ -30,7 +30,7 @@ pub(crate) async fn prepare_db(
 ) -> Result<axum::response::Json<DbStatusResponse>, crate::Error> {
     tokio::task::spawn_blocking(move || {
         let mut conn = state.pool.get()?;
-        conn.transaction(|conn| -> Result<(), crate::Error> {
+        conn.write_transaction(|conn| -> Result<(), crate::Error> {
             // Clean up database
             tpcc_models::cleanup(conn).map_err(|e| crate::Error::migration_error(e))?;
             // Setup schema (create table) and initial data
@@ -42,7 +42,7 @@ pub(crate) async fn prepare_db(
         // Can not vacuum in transaction
         tpcc_models::vacuum(&mut conn)?;
 
-        conn.transaction(|conn| {
+        conn.read_transaction(|conn| {
             let stat = DbStatusResponse {
                 warehouse_count: tpcc_models::Warehouse::count(conn)?,
                 district_count: tpcc_models::District::count(conn)?,

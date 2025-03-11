@@ -1,6 +1,6 @@
 use axum::extract;
 use if_types::StockLevelResponse;
-use tpcc_models::Connection;
+use tpcc_models::RwTransaction;
 
 /// Stock-Level Transaction
 /// TPC-C standard spec. 2.8
@@ -13,7 +13,7 @@ pub(crate) async fn check_stocks(
     tokio::task::spawn_blocking(move || {
         let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.transaction(|conn| {
+        let (resp, t1, t2) = conn.read_transaction(|conn| {
             let t1 = std::time::Instant::now();
             let warehouse = tpcc_models::Warehouse::find(warehouse_id, conn)?;
             let district = warehouse.find_district(district_id, conn)?;

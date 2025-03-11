@@ -80,3 +80,25 @@ diesel::table! {
         page_size -> BigInt
     }
 }
+
+impl crate::RwTransaction for DbConnection {
+    /// BEGIN DEFERRED transaction for read only queries.
+    /// SHARED lock will be held at first query statement (SELECT).
+    /// Write statements (INSERT, UPDATE, DELETE) will automatically trigger EXCLUSIVE lock.
+    fn read_transaction<T, E, F>(&mut self, f: F) -> Result<T, E>
+    where
+        F: FnOnce(&mut Self) -> Result<T, E>,
+        E: From<diesel::result::Error>,
+    {
+        diesel::connection::Connection::transaction(self, f)
+    }
+
+    /// Try taking EXCLUSIVE lock for write
+    fn write_transaction<T, E, F>(&mut self, f: F) -> Result<T, E>
+    where
+        F: FnOnce(&mut Self) -> Result<T, E>,
+        E: From<diesel::result::Error>,
+    {
+        DbConnection::immediate_transaction(self, f)
+    }
+}

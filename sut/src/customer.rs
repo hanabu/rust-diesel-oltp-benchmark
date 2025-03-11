@@ -1,6 +1,6 @@
 use axum::extract;
 use if_types::CustomersResponse;
-use tpcc_models::Connection;
+use tpcc_models::RwTransaction;
 
 /// for Debug
 pub(crate) async fn customer_by_id(
@@ -12,7 +12,7 @@ pub(crate) async fn customer_by_id(
         //use tpcc_models::Warehouse;
         let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.transaction(|conn| {
+        let (resp, t1, t2) = conn.read_transaction(|conn| {
             let t1 = std::time::Instant::now();
 
             // Search customer by ID
@@ -65,7 +65,7 @@ pub(crate) async fn customer_by_lastname(
         //use tpcc_models::Warehouse;
         let mut conn = state.pool.get()?;
         let t0 = std::time::Instant::now();
-        let (resp, t1, t2) = conn.transaction(|conn| {
+        let (resp, t1, t2) = conn.read_transaction(|conn| {
             let t1 = std::time::Instant::now();
             // Search customer by lastname
             let db_customers = tpcc_models::Customer::find_by_name(
