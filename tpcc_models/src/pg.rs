@@ -24,7 +24,7 @@ pub fn vacuum(conn: &mut DbConnection) -> QueryResult<()> {
 }
 
 /// Temporary return 0
-pub fn database_size(_conn: &mut DbConnection) -> QueryResult<i64> {
+pub fn database_size(_conn: &mut crate::RdConnection) -> QueryResult<i64> {
     // SELECT pg_database_size('databaseName');
     Ok(0)
 }
@@ -34,19 +34,23 @@ impl crate::RwTransaction for DbConnection {
     /// for Postgres, read_transaction() and write_transaction have no difference
     fn read_transaction<T, E, F>(&mut self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&mut Self) -> Result<T, E>,
+        for<'b> F: FnOnce(&'b mut crate::RdConnection<'b>) -> Result<T, E>,
         E: From<diesel::result::Error>,
     {
-        diesel::connection::Connection::transaction(self, f)
+        diesel::connection::Connection::transaction(self, |conn| {
+            f(&mut crate::RdConnection::new(conn))
+        })
     }
 
     /// BEGIN TRANSACTION
     /// for Postgres, read_transaction() and write_transaction have no difference
     fn write_transaction<T, E, F>(&mut self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&mut Self) -> Result<T, E>,
+        for<'b> F: FnOnce(&'b mut crate::WrConnection<'b>) -> Result<T, E>,
         E: From<diesel::result::Error>,
     {
-        diesel::connection::Connection::transaction(self, f)
+        diesel::connection::Connection::transaction(self, |conn| {
+            f(&mut crate::WrConnection::new(conn))
+        })
     }
 }

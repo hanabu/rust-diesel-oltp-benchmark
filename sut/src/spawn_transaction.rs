@@ -6,7 +6,7 @@ pub(crate) trait SpawnTransaction {
     async fn spawn_read_transaction<T, E, F>(&self, f: F) -> Result<T, crate::Error>
     where
         T: Send + 'static,
-        F: FnOnce(&mut tpcc_models::DbConnection) -> Result<T, E> + Send + 'static,
+        F: for<'a> FnOnce(&'a mut tpcc_models::RdConnection<'a>) -> Result<T, E> + Send + 'static,
         E: From<tpcc_models::QueryError> + Send,
         crate::Error: From<E>;
 
@@ -14,7 +14,7 @@ pub(crate) trait SpawnTransaction {
     async fn spawn_write_transaction<T, E, F>(&self, f: F) -> Result<T, crate::Error>
     where
         T: Send + 'static,
-        F: FnOnce(&mut tpcc_models::DbConnection) -> Result<T, E> + Send + 'static,
+        F: for<'a> FnOnce(&'a mut tpcc_models::WrConnection<'a>) -> Result<T, E> + Send + 'static,
         E: From<tpcc_models::QueryError> + Send,
         crate::Error: From<E>;
 }
@@ -24,7 +24,7 @@ impl SpawnTransaction for tpcc_models::Pool {
     async fn spawn_read_transaction<T, E, F>(&self, f: F) -> Result<T, crate::Error>
     where
         T: Send + 'static,
-        F: FnOnce(&mut tpcc_models::DbConnection) -> Result<T, E> + Send + 'static,
+        F: for<'a> FnOnce(&'a mut tpcc_models::RdConnection<'a>) -> Result<T, E> + Send + 'static,
         E: From<tpcc_models::QueryError> + Send,
         crate::Error: From<E>,
     {
@@ -42,7 +42,7 @@ impl SpawnTransaction for tpcc_models::Pool {
     async fn spawn_write_transaction<T, E, F>(&self, f: F) -> Result<T, crate::Error>
     where
         T: Send + 'static,
-        F: FnOnce(&mut tpcc_models::DbConnection) -> Result<T, E> + Send + 'static,
+        F: for<'a> FnOnce(&'a mut tpcc_models::WrConnection<'a>) -> Result<T, E> + Send + 'static,
         E: From<tpcc_models::QueryError> + Send,
         crate::Error: From<E>,
     {

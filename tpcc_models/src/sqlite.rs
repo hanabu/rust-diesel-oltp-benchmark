@@ -52,9 +52,11 @@ pub fn vacuum(conn: &mut DbConnection) -> QueryResult<()> {
 }
 
 /// SQLite database size
-pub fn database_size(conn: &mut DbConnection) -> QueryResult<i64> {
-    let page_count = diesel::sql_query("PRAGMA page_count").get_result::<PragmaPageCount>(conn)?;
-    let page_size = diesel::sql_query("PRAGMA page_size").get_result::<PragmaPageSize>(conn)?;
+pub fn database_size(conn: &mut crate::RdConnection) -> QueryResult<i64> {
+    let page_count =
+        diesel::sql_query("PRAGMA page_count").get_result::<PragmaPageCount>(conn.as_db())?;
+    let page_size =
+        diesel::sql_query("PRAGMA page_size").get_result::<PragmaPageSize>(conn.as_db())?;
 
     Ok(page_count.page_count * page_size.page_size)
 }
@@ -87,18 +89,20 @@ impl crate::RwTransaction for DbConnection {
     /// Write statements (INSERT, UPDATE, DELETE) will automatically trigger EXCLUSIVE lock.
     fn read_transaction<T, E, F>(&mut self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&mut Self) -> Result<T, E>,
+        for<'b> F: FnOnce(&'b mut crate::RdConnection<'b>) -> Result<T, E>,
         E: From<diesel::result::Error>,
     {
-        diesel::connection::Connection::transaction(self, f)
+        diesel::connection::Connection::transaction(self, |conn| {
+            f(&mut crate::RdConnection::new(conn))
+        })
     }
 
     /// Try taking EXCLUSIVE lock for write
     fn write_transaction<T, E, F>(&mut self, f: F) -> Result<T, E>
     where
-        F: FnOnce(&mut Self) -> Result<T, E>,
+        for<'b> F: FnOnce(&'b mut crate::WrConnection<'b>) -> Result<T, E>,
         E: From<diesel::result::Error>,
     {
-        DbConnection::immediate_transaction(self, f)
+        DbConnection::immediate_transaction(self, |conn| f(&mut crate::WrConnection::new(conn)))
     }
 }

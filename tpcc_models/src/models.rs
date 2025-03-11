@@ -1,4 +1,4 @@
-use crate::{schema, DbConnection};
+use crate::{schema, RdConnection, WrConnection};
 use diesel::prelude::*;
 
 #[cfg(feature = "postgres")]
@@ -9,22 +9,22 @@ const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations_sqlite");
 
 /// Cleanup existing data
-pub fn cleanup(conn: &mut DbConnection) -> diesel::migration::Result<()> {
+pub fn cleanup(conn: &mut WrConnection) -> diesel::migration::Result<()> {
     use diesel_migrations::MigrationHarness;
 
     // Run migration
-    conn.revert_all_migrations(MIGRATIONS)?;
+    conn.as_db().revert_all_migrations(MIGRATIONS)?;
     log::warn!("Reverted all migrations");
 
     Ok(())
 }
 
 /// Run database migration, prepare initial records
-pub fn prepare(scale_factor: i32, conn: &mut DbConnection) -> diesel::migration::Result<()> {
+pub fn prepare(scale_factor: i32, conn: &mut WrConnection) -> diesel::migration::Result<()> {
     use diesel_migrations::MigrationHarness;
 
     // Run migration
-    conn.run_pending_migrations(MIGRATIONS)?;
+    conn.as_db().run_pending_migrations(MIGRATIONS)?;
     log::warn!("Done all migrations");
 
     // Prepare initial records
@@ -86,22 +86,22 @@ pub struct Item {
 
 impl Item {
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::items::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 
     // Prepare initial Items
     pub fn prepare(
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::items;
         let cur_id = items::table
             .select(diesel::dsl::max(items::i_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_items = (0..num)
@@ -119,7 +119,7 @@ impl Item {
 
         diesel::insert_into(items::table)
             .values(&prepared_items)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
         Ok(prepared_items)
     }
 }
@@ -141,21 +141,21 @@ pub struct Warehouse {
 
 impl Warehouse {
     /// Get Warehouse by it's id
-    pub fn find(id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
-        schema::warehouses::table.find(id).first(conn)
+    pub fn find(id: i32, conn: &mut RdConnection) -> QueryResult<Self> {
+        schema::warehouses::table.find(id).first(conn.as_db())
     }
 
     /// Get District
     pub fn find_district(
         &self,
         district_id: i32,
-        conn: &mut DbConnection,
+        conn: &mut RdConnection,
     ) -> QueryResult<District> {
         District::find(self.w_id, district_id, conn)
     }
 
     /// All districts under this warehouse
-    pub fn all_districts(&self, conn: &mut DbConnection) -> QueryResult<Vec<District>> {
+    pub fn all_districts(&self, conn: &mut RdConnection) -> QueryResult<Vec<District>> {
         District::all_by_warehouse(self.w_id, conn)
     }
 
@@ -165,18 +165,18 @@ impl Warehouse {
     }
 
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::warehouses::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Prepare Warehose
-    pub fn prepare(rand: &mut tpcc_rand::TpcRandom, conn: &mut DbConnection) -> QueryResult<Self> {
+    pub fn prepare(rand: &mut tpcc_rand::TpcRandom, conn: &mut WrConnection) -> QueryResult<Self> {
         use schema::warehouses;
         let cur_id = warehouses::table
             .select(diesel::dsl::max(warehouses::w_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         // TPC-C standard spec. 4.3.3
@@ -194,7 +194,7 @@ impl Warehouse {
 
         diesel::insert_into(warehouses::table)
             .values(&prepared_warehouse)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
         Ok(prepared_warehouse)
     }
 
@@ -204,7 +204,7 @@ impl Warehouse {
         &self,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Stock>> {
         Stock::prepare(self.w_id, num, rand, conn)
     }
@@ -215,7 +215,7 @@ impl Warehouse {
         &self,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<District>> {
         District::prepare(self.w_id, num, rand, conn)
     }
@@ -251,7 +251,7 @@ impl Stock {
         &self,
         quantity: i32,
         order_by_warehouse_id: i32,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Self> {
         use schema::stocks;
         let new_qty = if self.s_quantity > quantity + 10 {
@@ -276,16 +276,16 @@ impl Stock {
                 stocks::s_order_cnt.eq(stocks::s_order_cnt + 1),
                 stocks::s_remote_cnt.eq(stocks::s_remote_cnt + remote_inc),
             ))
-            .get_result(conn)?;
+            .get_result(conn.as_db())?;
 
         Ok(updated_stock)
     }
 
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::stocks::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Insert new stocks
@@ -294,13 +294,13 @@ impl Stock {
         warehouse_id: i32,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::stocks;
         let cur_id = stocks::table
             .filter(stocks::s_w_id.eq(warehouse_id))
             .select(diesel::dsl::max(stocks::s_i_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_stocks = (0..num)
@@ -330,7 +330,7 @@ impl Stock {
 
         diesel::insert_into(stocks::table)
             .values(&prepared_stocks)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
         Ok(prepared_stocks)
     }
 }
@@ -342,13 +342,13 @@ pub struct StockedItem {
 }
 
 impl StockedItem {
-    pub fn find(warehouse_id: i32, item_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
+    pub fn find(warehouse_id: i32, item_id: i32, conn: &mut RdConnection) -> QueryResult<Self> {
         use schema::{items, stocks};
-        let item = items::table.find(item_id).first::<Item>(conn)?;
+        let item = items::table.find(item_id).first::<Item>(conn.as_db())?;
         let stock = stocks::table
             .filter(stocks::s_w_id.eq(warehouse_id))
             .filter(stocks::s_i_id.eq(item_id))
-            .first::<Stock>(conn)?;
+            .first::<Stock>(conn.as_db())?;
 
         Ok(Self { item, stock })
     }
@@ -374,21 +374,21 @@ pub struct District {
 impl District {
     /// Get district by it's id
     ///   public API: call warehouse.find_district() instead.
-    fn find(warehouse_id: i32, district_id: i32, conn: &mut DbConnection) -> QueryResult<Self> {
+    fn find(warehouse_id: i32, district_id: i32, conn: &mut RdConnection) -> QueryResult<Self> {
         use schema::districts;
         districts::table
             .filter(districts::d_w_id.eq(warehouse_id))
             .filter(districts::d_id.eq(district_id))
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Get district by warehouse
     ///   public API: call warehouse.all_districts() instead.
-    fn all_by_warehouse(warehouse_id: i32, conn: &mut DbConnection) -> QueryResult<Vec<Self>> {
+    fn all_by_warehouse(warehouse_id: i32, conn: &mut RdConnection) -> QueryResult<Vec<Self>> {
         use schema::districts;
         districts::table
             .filter(districts::d_w_id.eq(warehouse_id))
-            .load(conn)
+            .load(conn.as_db())
     }
 
     /// Get tax rate of the district
@@ -400,7 +400,7 @@ impl District {
     pub fn find_customer(
         &self,
         customer_id: i32,
-        conn: &mut DbConnection,
+        conn: &mut RdConnection,
     ) -> QueryResult<Customer> {
         Customer::find(self.d_w_id, self.d_id, customer_id, conn)
     }
@@ -411,10 +411,8 @@ impl District {
         &mut self,
         customer: &Customer,
         items: &[(StockedItem, i32)], // (item, quantity)
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<(Order, Vec<OrderLine>)> {
-        use diesel::Connection;
-
         conn.transaction(|conn| {
             // Run transaction
             let order_id = self.issue_order_id(conn)?;
@@ -430,7 +428,7 @@ impl District {
     }
 
     /// Issue new order_id
-    fn issue_order_id(&mut self, conn: &mut DbConnection) -> QueryResult<i32> {
+    fn issue_order_id(&mut self, conn: &mut WrConnection) -> QueryResult<i32> {
         use schema::districts;
 
         // Increment d_next_o_id
@@ -440,7 +438,7 @@ impl District {
         let next_id = diesel::update(row)
             .set(districts::d_next_o_id.eq(districts::d_next_o_id + 1))
             .returning(districts::d_next_o_id)
-            .get_result(conn)?;
+            .get_result(conn.as_db())?;
 
         self.d_next_o_id = next_id;
 
@@ -449,9 +447,8 @@ impl District {
 
     /// Delivery transaction
     /// TPC-C standard spec. 2.7.4
-    pub fn delivery(&self, carrier_id: i32, conn: &mut DbConnection) -> QueryResult<usize> {
-        use diesel::Connection;
-        conn.transaction(|conn| {
+    pub fn delivery(&self, carrier_id: i32, conn: &mut WrConnection) -> QueryResult<usize> {
+        conn.transaction(move |mut conn| {
             use schema::{customers, new_orders, orders};
 
             // Oldest 10 orders
@@ -461,7 +458,7 @@ impl District {
                 .order(new_orders::no_o_id)
                 .select(new_orders::no_o_id)
                 .limit(10)
-                .load::<i32>(conn)?;
+                .load::<i32>(conn.as_db())?;
             // Remove new_orders to be delivered
             diesel::delete(
                 new_orders::table
@@ -469,7 +466,7 @@ impl District {
                     .filter(new_orders::no_d_id.eq(self.d_id))
                     .filter(new_orders::no_o_id.eq_any(&order_ids)),
             )
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
             let orders_to_deliver: Vec<Order> = diesel::update(
                 orders::table
@@ -478,11 +475,11 @@ impl District {
                     .filter(orders::o_id.eq_any(order_ids)),
             )
             .set(orders::o_carrier_id.eq(carrier_id))
-            .get_results(conn)?;
+            .get_results(conn.as_db())?;
 
             let tm = chrono::Utc::now().naive_utc();
             for order in &orders_to_deliver {
-                let lines = order.record_lines_deliver_at(tm, conn)?;
+                let lines = order.record_lines_deliver_at(tm, &mut conn)?;
                 let total_amount = lines.iter().map(|ol| ol.amount()).sum::<f64>();
 
                 // Update customer balance
@@ -496,7 +493,7 @@ impl District {
                     customers::c_balance.eq(customers::c_balance + total_amount),
                     customers::c_delivery_cnt.eq(customers::c_delivery_cnt + 1),
                 ))
-                .execute(conn)?;
+                .execute(conn.as_db())?;
             }
             Ok(orders_to_deliver.len())
         })
@@ -507,7 +504,7 @@ impl District {
     pub fn check_stock_level(
         &self,
         stock_level: i32,
-        conn: &mut DbConnection,
+        conn: &mut RdConnection,
     ) -> QueryResult<usize> {
         use schema::{order_lines, stocks};
 
@@ -516,7 +513,7 @@ impl District {
             .filter(order_lines::ol_d_id.eq(self.d_id))
             .filter(order_lines::ol_o_id.ge(self.d_next_o_id - 20))
             .select(order_lines::ol_i_id)
-            .load(conn)?;
+            .load(conn.as_db())?;
 
         // Count items lower than stock level
         let low_stocks: i64 = stocks::table
@@ -524,16 +521,16 @@ impl District {
             .filter(stocks::s_i_id.eq_any(&item_ids))
             .filter(stocks::s_quantity.lt(stock_level))
             .select(diesel::dsl::count_distinct(stocks::s_i_id))
-            .first(conn)?;
+            .first(conn.as_db())?;
 
         Ok(low_stocks as usize)
     }
 
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::districts::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Insert new districts
@@ -542,13 +539,13 @@ impl District {
         warehouse_id: i32,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::districts;
         let cur_id = districts::table
             .filter(districts::d_w_id.eq(warehouse_id))
             .select(diesel::dsl::max(districts::d_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_districts = (0..num)
@@ -572,7 +569,7 @@ impl District {
 
         diesel::insert_into(districts::table)
             .values(&prepared_districts)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
         Ok(prepared_districts)
     }
 
@@ -582,7 +579,7 @@ impl District {
         &self,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Customer>> {
         Customer::prepare(self.d_w_id, self.d_id, num, rand, conn)
     }
@@ -593,7 +590,7 @@ impl District {
         &self,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Order>> {
         Order::prepare(self.d_w_id, self.d_id, num, rand, conn)
     }
@@ -631,14 +628,14 @@ impl Customer {
         warehouse_id: i32,
         district_id: i32,
         customer_id: i32,
-        conn: &mut DbConnection,
+        conn: &mut RdConnection,
     ) -> QueryResult<Self> {
         use schema::customers;
         customers::table
             .filter(customers::c_w_id.eq(warehouse_id))
             .filter(customers::c_d_id.eq(district_id))
             .filter(customers::c_id.eq(customer_id))
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Get customer by it's last name
@@ -646,7 +643,7 @@ impl Customer {
         warehouse_id: i32,
         district_id: i32,
         lastname: &str,
-        conn: &mut DbConnection,
+        conn: &mut RdConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::customers;
         customers::table
@@ -654,7 +651,7 @@ impl Customer {
             .filter(customers::c_d_id.eq(district_id))
             .filter(customers::c_last.eq(lastname))
             .order(customers::c_first)
-            .load::<Self>(conn)
+            .load::<Self>(conn.as_db())
     }
 
     /// Payment Transaction
@@ -663,23 +660,22 @@ impl Customer {
         &self,
         district_at: &District,
         amount: f64,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<(Self, History, District, Warehouse)> {
-        use diesel::Connection;
         use schema::{customers, districts, warehouses};
 
-        conn.transaction(move |conn| {
+        conn.transaction(move |mut conn| {
             // Increment warehouse ytd
             let warehouse = diesel::update(warehouses::table.find(district_at.d_w_id))
                 .set(warehouses::w_ytd.eq(warehouses::w_ytd + amount))
-                .get_result::<Warehouse>(conn)?;
+                .get_result::<Warehouse>(conn.as_db())?;
             // Increment district ytd
             let row = districts::table
                 .filter(districts::d_w_id.eq(district_at.d_w_id))
                 .filter(districts::d_id.eq(district_at.d_id));
             let district = diesel::update(row)
                 .set(districts::d_ytd.eq(districts::d_ytd + amount))
-                .get_result::<District>(conn)?;
+                .get_result::<District>(conn.as_db())?;
 
             // Update customer column
             let row = customers::table
@@ -706,18 +702,19 @@ impl Customer {
                         customers::c_ytd_payment.eq(customers::c_ytd_payment + amount),
                         customers::c_data.eq(new_c_data_trimed),
                     ))
-                    .get_result::<Self>(conn)?
+                    .get_result::<Self>(conn.as_db())?
             } else {
                 diesel::update(row)
                     .set((
                         customers::c_balance.eq(customers::c_balance - amount),
                         customers::c_ytd_payment.eq(customers::c_ytd_payment + amount),
                     ))
-                    .get_result::<Self>(conn)?
+                    .get_result::<Self>(conn.as_db())?
             };
 
             // Insert history
-            let history = History::insert(&updated_customer, &warehouse, &district, amount, conn)?;
+            let history =
+                History::insert(&updated_customer, &warehouse, &district, amount, &mut conn)?;
 
             Ok((updated_customer, history, district, warehouse))
         })
@@ -726,7 +723,7 @@ impl Customer {
     /// Returns last order
     /// Order-Status Transaction
     /// TPC-C standard spec. 2.6
-    pub fn last_order(&self, conn: &mut DbConnection) -> QueryResult<(Order, Vec<OrderLine>)> {
+    pub fn last_order(&self, conn: &mut RdConnection) -> QueryResult<(Order, Vec<OrderLine>)> {
         use schema::orders;
 
         let order = orders::table
@@ -734,7 +731,7 @@ impl Customer {
             .filter(orders::o_d_id.eq(self.c_d_id))
             .filter(orders::o_c_id.eq(self.c_id))
             .order(orders::o_id.desc())
-            .first::<Order>(conn)?;
+            .first::<Order>(conn.as_db())?;
 
         let lines = order.order_lines(conn)?;
 
@@ -762,10 +759,10 @@ impl Customer {
     }
 
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::customers::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Insert new customers
@@ -775,7 +772,7 @@ impl Customer {
         district_id: i32,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::{customers, histories};
 
@@ -783,7 +780,7 @@ impl Customer {
             .filter(customers::c_w_id.eq(warehouse_id))
             .filter(customers::c_d_id.eq(district_id))
             .select(diesel::dsl::max(customers::c_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_customers = (0..num)
@@ -829,12 +826,12 @@ impl Customer {
             .collect::<Vec<Self>>();
         diesel::insert_into(customers::table)
             .values(&prepared_customers)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         // Also insert histories
         let cur_h_id = histories::table
             .select(diesel::dsl::max(histories::h_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
         let prepared_histories = prepared_customers
             .iter()
@@ -856,7 +853,7 @@ impl Customer {
             .collect::<Vec<History>>();
         diesel::insert_into(histories::table)
             .values(&prepared_histories)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         Ok(prepared_customers)
     }
@@ -882,14 +879,14 @@ impl History {
         warehouse_at: &Warehouse,
         district_at: &District,
         amount: f64,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Self> {
         use schema::histories;
 
         // max history_id
         let cur_h_id = histories::table
             .select(diesel::dsl::max(histories::h_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         let history = Self {
@@ -906,7 +903,7 @@ impl History {
 
         diesel::insert_into(histories::table)
             .values(&history)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         Ok(history)
     }
@@ -917,10 +914,10 @@ impl History {
     }
 
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::histories::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 }
 
@@ -946,7 +943,7 @@ impl Order {
         order_id: i32,
         customer: &Customer,
         items: &[(StockedItem, i32)],
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<(Self, Vec<OrderLine>)> {
         use schema::{new_orders, order_lines, orders};
 
@@ -963,7 +960,7 @@ impl Order {
         };
         diesel::insert_into(orders::table)
             .values(&insert_order)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         // NewOrder
         let insert_new_order = NewOrder {
@@ -973,7 +970,7 @@ impl Order {
         };
         diesel::insert_into(new_orders::table)
             .values(&insert_new_order)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         // OrderLines
         let insert_order_lines = items
@@ -983,13 +980,13 @@ impl Order {
             .collect::<Vec<_>>();
         diesel::insert_into(order_lines::table)
             .values(&insert_order_lines)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         Ok((insert_order, insert_order_lines))
     }
 
     /// OrderLines of this Order
-    fn order_lines(&self, conn: &mut DbConnection) -> QueryResult<Vec<OrderLine>> {
+    fn order_lines(&self, conn: &mut RdConnection) -> QueryResult<Vec<OrderLine>> {
         use schema::order_lines;
 
         order_lines::table
@@ -997,14 +994,14 @@ impl Order {
             .filter(order_lines::ol_d_id.eq(self.o_d_id))
             .filter(order_lines::ol_o_id.eq(self.o_id))
             .order(order_lines::ol_number)
-            .load::<OrderLine>(conn)
+            .load::<OrderLine>(conn.as_db())
     }
 
     /// Record delivery timestamp to OrderLines
     fn record_lines_deliver_at(
         &self,
         tm: chrono::NaiveDateTime,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<OrderLine>> {
         use schema::order_lines;
 
@@ -1015,7 +1012,7 @@ impl Order {
                 .filter(order_lines::ol_o_id.eq(self.o_id)),
         )
         .set(order_lines::ol_delivery_d.eq(tm))
-        .get_results::<OrderLine>(conn)?;
+        .get_results::<OrderLine>(conn.as_db())?;
 
         Ok(updated_lines)
     }
@@ -1034,10 +1031,10 @@ impl Order {
     }
 
     /// Count all rows
-    pub fn count(conn: &mut DbConnection) -> QueryResult<i64> {
+    pub fn count(conn: &mut RdConnection) -> QueryResult<i64> {
         schema::orders::table
             .select(diesel::dsl::count_star())
-            .first(conn)
+            .first(conn.as_db())
     }
 
     /// Insert new orders
@@ -1047,14 +1044,14 @@ impl Order {
         district_id: i32,
         num: i32,
         rand: &mut tpcc_rand::TpcRandom,
-        conn: &mut DbConnection,
+        conn: &mut WrConnection,
     ) -> QueryResult<Vec<Self>> {
         use schema::{customers, new_orders, order_lines, orders};
         let cur_id = orders::table
             .filter(orders::o_w_id.eq(warehouse_id))
             .filter(orders::o_d_id.eq(district_id))
             .select(diesel::dsl::max(orders::o_id))
-            .first::<Option<i32>>(conn)?
+            .first::<Option<i32>>(conn.as_db())?
             .unwrap_or(0);
 
         // min-max customer ID
@@ -1065,7 +1062,7 @@ impl Order {
                 diesel::dsl::min(customers::c_id),
                 diesel::dsl::max(customers::c_id),
             ))
-            .first::<(Option<i32>, Option<i32>)>(conn)?;
+            .first::<(Option<i32>, Option<i32>)>(conn.as_db())?;
 
         let min_c_id = min_c_id.unwrap_or(0);
         let max_c_id = max_c_id.unwrap_or(0);
@@ -1095,7 +1092,7 @@ impl Order {
             .collect::<Vec<Self>>();
         diesel::insert_into(orders::table)
             .values(&prepared_orders)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         // OrderLines
         let prepared_orderlines = prepared_orders
@@ -1130,7 +1127,7 @@ impl Order {
             .collect::<Vec<OrderLine>>();
         diesel::insert_into(order_lines::table)
             .values(&prepared_orderlines)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         // NewOrders
         let prepared_new_orders = prepared_orders
@@ -1149,7 +1146,7 @@ impl Order {
             .collect::<Vec<NewOrder>>();
         diesel::insert_into(new_orders::table)
             .values(&prepared_new_orders)
-            .execute(conn)?;
+            .execute(conn.as_db())?;
 
         Ok(prepared_orders)
     }
