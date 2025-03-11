@@ -1,63 +1,95 @@
 [![en](https://img.shields.io/badge/lang-en-blue.svg)](README.md)
 [![ja](https://img.shields.io/badge/lang-ja-green.svg)](README.ja.md)
 
+(This English README is machine translated from Japanese.)
+
 # TPC-C like database benchmark written in Rust Diesel ORM
 
-todo!()
+[TPC-C](https://www.tpc.org/tpcc/) OLTP benchmark implemented in Rust's [Diesel ORM](https://diesel.rs/).
 
-## Test results (with transaction)
+##  Motivation
 
-WSL2 , AmazonLinux 2023 on Windows Dev Kit 2023 (Snapdragon 8cx Gen3)
+ I want to measure how slow [SQLite](https://www.sqlite.org/) database is on [AWS EFS](https://aws.amazon.com/efs/). Since I don't have enough experience to design a reasonable database benchmark, I used TPC's standard benchmark specification, which I believe contains the wisdom of our ancestors.
 
-| Database      | Concurrency |  TPM  |
-|:-------------:| -----------:| -----:|
-| SQLite 3.44.0 |           1 |  2403 |
-| SQLite 3.44.0 |           2 |  2717 |
-| SQLite 3.44.0 |           4 |  2611 |
-| SQLite 3.44.0 |           8 |  2554 |
-| Postgres 15.4 |           1 |  1317 |
-| Postgres 15.4 |           2 |   |
-| Postgres 15.4 |           4 |   |
-| Postgres 15.4 |           8 |   |
+##  How to use
 
+ Benchmark consists of an HTTP server (SUT, System Under Test) and a simulated HTTP client (Remote Terminal Emulator). With the SUT running first, perform the measurement by making a series of requests from the RTE.
 
-AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (elastic throughput)
+``` console
+ $ cd diesel-tpc-c/sut
 
-| Database      | Concurrency |  TPM  |
-|:-------------:| -----------:| -----:|
-| SQLite 3.44.0 |           1 |    45 |
+(Run SQLite backend)
+$ cargo run --release
 
-AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (burst throughput)
+(Run PostgreSQL backend)
+$ export DATABASE_URL=postgres://user:password@db_host/db_name
+$ cargo run --release --no-default-features --features=postgres
+```
 
-| Database      | Concurrency |  TPM  |
-|:-------------:| -----------:| -----:|
-| SQLite 3.44.0 |           1 |    41 |
+ With the SUT running as described above, run benchmark from the RTE.
 
-AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (burst throughput), PRAGMA cache_size = -32768;
+- `-s`: Scale factor (number of warehouses)
+- `-c`: Number of simultaneous connections
+- `-d`: Measurement time (seconds)
 
-| Database      | Concurrency |  TPM  |
-|:-------------:| -----------:| -----:|
-| SQLite 3.48.0 |           1 |   132 |
+``` console
+ $ cd diesel-tpc-c/rte
 
+(Prepare database)
+$ cargo run -- prepare -s 1 http://localhost:3000
 
-## Test results (without transaction)
+(Run benchmark)
+$ cargo run -- run -c 1 -d 30 http://localhost:3000
+...
+[INFO rte] Start benchmark
+[INFO rte] Finished
+1426.0 tpm = 713 new_order transactions in 30.000 secs
+new_order: 932 calls, 0.023s/call
+payment: 931 calls, 0.008s/call
+order_status: 85 calls, 0.003s/call
+delivery: 84 calls, 0.042s/call
+stock_level: 840 calls, 0.003s/call
+customer_by_name: 584 calls, 0.002s/call
+```
 
-WSL2 , AmazonLinux 2023 on Windows Dev Kit 2023 (Snapdragon 8cx Gen3)
+`1426.0 tpm` is the benchmark result indicator. The TPC-C standard measures the number of new\_order executions per minute when five transactions (new\_order, payment, order\_status, delivery, and stock\_level) are called at a certain rate. \
+ The number of new\_order executions per minute is used as an indicator.
 
-| Database      | Concurrency |  TPM  |
-|:-------------:| -----------:| -----:|
-| SQLite 3.44.0 |           1 |  1826 |
-| SQLite 3.44.0 |           2 |  1994 |
-| SQLite 3.44.0 |           4 |  2024 |
-| SQLite 3.44.0 |           8 |  2014 |
-| Postgres 15.4 |           1 |  1134 |
-| Postgres 15.4 |           2 |  2970 |
-| Postgres 15.4 |           4 |  4568 |
-| Postgres 15.4 |           8 |  6570 |
+##  Compliance with TPC-C standards
 
+ Although the implementation conforms to the TPC-C 5.11 specification as much as possible, the following points do not conform to the standard.
 
-AWS Lambda (Arm64, 1792MB, ap-northeast-1) + EFS (elastic throughput)
+-  According to the specification, the RTE is supposed to simulate the key input waiting time, but in this implementation, the RTE does not wait and makes a request continuously.
+-  The specification also stipulates screen display of the RTE, but screen display is not implemented (items required for screen display are returned in JSON format as a response from the SUT).
+-  When multiple warehouses are handled with a scale factor\>1, the specification specifies a process to allocate inventory to other warehouses (remote warehouses), but this implementation does not correctly implement it.
+-  There may be other non-compliances.
 
-| Database      | Concurrency |  TPM  |
-|:-------------:| -----------:| -----:|
-| SQLite 3.44.0 |           1 |    34 |
+-----
+
+##  SQLite on EFS
+
+ Compared to running on a PC with SSD, the performance is about 1/10 to 1/20 when running on EFS, a network file system. It is slow in comparison, but not unusable.
+
+    126.0 tpm = 126 new_order transactions in 60.000 secs
+    new_order: 143 calls, 0.189s/call
+    payment: 143 calls, 0.118s/call
+    order_status: 13 calls, 0.065s/call
+    delivery: 13 calls, 0.437s/call
+    stock_level: 130 calls, 0.061s/call
+    customer_by_name: 85 calls, 0.045s/call
+
+ Benchmark run: 442 transactions in 70 seconds, EFS burst credit consumed 102.3MB, SQLite database file size is about 90MB.
+
+ Conditions are as follows:
+
+-  AWS ap-northeast-1 Tokyo region
+-  SUT execution environment : AWS Lambda Arm64, 1792MB, AmazonLinux 2023 runtime
+-  RTE configuration : Scale factor=1, 1 parallel
+-  EFS: burst throughput mode
+-  SQLite-3.48.0, Diesel-2.2.8, Rust-1.85.0
+
+###  Notes on using SQLite with EFS
+
+- [WAL mode](https://www.sqlite.org/wal.html) cannot be used, because WAL requires shared memory by mmap, which is not available in NFS. Instead of WAL, use `PRAGMA journal_mode = DELETE;`
+-  It is better to use a large [cache size](https://www.sqlite.org/pragma.html#pragma_cache_size). In the above TPC-C benchmark, cache size 2MB -\> 32MiB, about 40tpm -\> about 120tpm.
+-  It is recommended to combine multiple queries into `BEGIN TRANSACTION; ... COMMIT;`. File lock is be done only once for each transaction. EFS uses file lock via network, so the delay is large and reducing the number of file locks will easily affect performance.

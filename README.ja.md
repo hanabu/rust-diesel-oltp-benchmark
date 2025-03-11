@@ -11,10 +11,11 @@
 
 ## 使い方
 
-HTTP server となる測定対象部 (SUT, System Under Test) と、HTTP client となる模擬 client (Remote Terminal Emulator) からなる。先に SUT を起動しておいた状態で、RTE から連続して request 行って測定する。
+Benchmark は HTTP server となる測定対象部 (SUT, System Under Test) と、HTTP client となる模擬 client (Remote Terminal Emulator) からなる。先に SUT を起動しておいた状態で、RTE から連続して request 行って測定する。
 
 ```console
 $ cd diesel-tpc-c/sut
+
 (Run SQLite backend)
 $ cargo run --release
 
@@ -31,8 +32,10 @@ $ cargo run --release --no-default-features --features=postgres
 
 ```console
 $ cd diesel-tpc-c/rte
+
 (Prepare database)
 $ cargo run -- prepare -s 1 http://localhost:3000
+
 (Run benchmark)
 $ cargo run -- run -c 1 -d 30 http://localhost:3000
 ...
@@ -47,14 +50,15 @@ stock_level:        840 calls, 0.003s/call
 customer_by_name:   584 calls, 0.002s/call
 ```
 
-`1426.0 tpm` が benchmark の測定値になる。TPC-C 標準では、new_order, payment, order_status, delivery, stock_level の 5つの transaction を一定の割合で呼び出したときの 1分あたりの new_order 実行数を測定指標としている。
+`1426.0 tpm` が benchmark の測定値になる。  
+TPC-C 標準では、new\_order, payment, order\_status, delivery, stock\_level の 5つの transaction を一定の割合で呼び出したときの 1分あたりの new_order 実行数を測定指標としている。
 
 ## TPC-C 標準への準拠
 
 なるべく TPC-C 5.11 の仕様に合わせて実装しているが、以下の点は標準に従っていない。
 
 - 仕様では、RTE は key 入力待ち時間を模擬することになっているが、本実装では待たずに連続して request を行っている
-- 仕様では、RTE の画面表示も規定されているが、画面表示は実装していない (画面表示に必要な項目は、SUT の応答として JSON 形式で返してはいる)
+- 仕様では、RTE の画面表示も規定されているが、画面表示は実装していない (画面表示に必要な項目は、SUT からの応答として JSON 形式で返してはいる)
 - Scale factor>1 で複数の倉庫を扱う場合に、他の倉庫 (remote warehouse) の在庫引き当てをする処理が規定されているが、本実装では正しく実装していない
 - 他にも非準拠はあるかも
 
@@ -88,4 +92,4 @@ Benchmark 実行 70秒間で 442 transactions, EFS burst credit を 102.3MB 消�
 
 - [WAL mode](https://www.sqlite.org/wal.html) は使用できない。WAL は mmap による共有 memory を必要とするが、NFS では利用できないため。WAL mode で使うと SQLite file が壊れるため `PRAGMA journal_mode = DELETE;` で利用する。
 - [cache size](https://www.sqlite.org/pragma.html#pragma_cache_size) は大きくしたほうが良い。上記の TPC-C benchmark では cache size 2MB -> 32MiB で 約40tpm -> 約120tpm へ改善。
-- 複数の query を `BEGIN TRANSACTION; ... COMMIT;` にまとめる。File lock が transaction 単位にまとめて 1回 で済む。EFS は network 経由で file lock のため遅延が大きく、file lock 回数削減は性能に影響が出やすい。
+- 複数の query を `BEGIN TRANSACTION; ... COMMIT;` にまとめるとよい。File lock が transaction 単位にまとめて 1回 で済む。EFS は network 経由で file lock のため遅延が大きく、file lock 回数削減は性能に影響が出やすい。
