@@ -1,47 +1,52 @@
 use crate::SpawnTransaction;
 use axum::extract;
-use if_types::StockLevelResponse;
+use if_types::{StockLevelParams, StockLevelResponse};
 
 /// Stock-Level Transaction
 /// TPC-C standard spec. 2.8
 pub(crate) async fn check_stocks(
     extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Path((warehouse_id, district_id)): extract::Path<(i32, i32)>,
-    extract::Query(params): extract::Query<if_types::StockLevelParams>,
+    extract::Query(params): extract::Query<StockLevelParams>,
 ) -> Result<axum::response::Json<StockLevelResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    let t0 = std::time::Instant::now();
-    let (resp, t1, t2) = state
+
+    let perflog = crate::PerformanceLog::new();
+    let (contents, mut perflog) = state
         .pool
         .spawn_read_transaction(move |conn| {
-            let t1 = std::time::Instant::now();
+            let mut perflog = perflog;
+            perflog.begin();
+
             let warehouse = tpcc_models::Warehouse::find(warehouse_id, conn)?;
             let district = warehouse.find_district(district_id, conn)?;
 
             let low_stocks = district.check_stock_level(params.stock_level, conn)?;
 
-            let t2 = std::time::Instant::now();
+            perflog.finish();
             Ok::<_, crate::Error>((
-                axum::Json(StockLevelResponse {
+                if_types::StockLevelContents {
                     low_stocks: low_stocks as i32,
-                }),
-                t1,
-                t2,
+                },
+                perflog,
             ))
         })
         .await?;
-    let t3 = std::time::Instant::now();
+
+    perflog.commit();
+    let perf = perflog.to_performance_metric();
     log::debug!(
-        "check_stocks() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-        (t1 - t0).as_secs_f32(),
-        (t2 - t1).as_secs_f32(),
-        (t3 - t2).as_secs_f32(),
-        (t3 - t0).as_secs_f32(),
+        "check_stocks() : Begin {:.03}s, Query {:.03}s, Commit {:03}s",
+        perf.begin,
+        perf.query,
+        perf.commit
     );
 
-    let elapsed = (t3 - t0).as_micros() as usize;
     state.statistics.stock_level_count.fetch_add(1, Relaxed);
-    state.statistics.stock_level_us.fetch_add(elapsed, Relaxed);
+    state
+        .statistics
+        .stock_level_us
+        .fetch_add(perflog.total_us(), Relaxed);
 
-    Ok(resp)
+    Ok(axum::Json(StockLevelResponse { contents, perf }))
 }

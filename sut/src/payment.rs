@@ -9,11 +9,14 @@ pub(crate) async fn payment(
     extract::Json(params): extract::Json<PaymentRequest>,
 ) -> Result<axum::response::Json<PaymentResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    let t0 = std::time::Instant::now();
-    let (resp, t1, t2) = state
+
+    let perflog = crate::PerformanceLog::new();
+    let (contents, mut perflog) = state
         .pool
         .spawn_write_transaction(move |conn| {
-            let t1 = std::time::Instant::now();
+            let mut perflog = perflog;
+            perflog.begin();
+
             // Search district, customer by ID
             let warehouse = tpcc_models::Warehouse::find(params.warehouse_id, conn)?;
             let district = warehouse.find_district(params.district_id, conn)?;
@@ -28,30 +31,31 @@ pub(crate) async fn payment(
             let (_updated_customer, history, _updated_district, _updated_warehouse) =
                 customer.pay(&district, params.amount, conn)?;
 
-            let t2 = std::time::Instant::now();
+            perflog.finish();
             Ok::<_, crate::Error>((
-                axum::Json(if_types::PaymentResponse {
+                if_types::PaymentContents {
                     amount: params.amount,
                     paied_at: history.timestamp().and_utc(),
-                }),
-                t1,
-                t2,
+                },
+                perflog,
             ))
         })
         .await?;
 
-    let t3 = std::time::Instant::now();
+    perflog.commit();
+    let perf = perflog.to_performance_metric();
     log::debug!(
-        "payment() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-        (t1 - t0).as_secs_f32(),
-        (t2 - t1).as_secs_f32(),
-        (t3 - t2).as_secs_f32(),
-        (t3 - t0).as_secs_f32(),
+        "payment() : Begin {:.03}s, Query {:.03}s, Commit {:03}s",
+        perf.begin,
+        perf.query,
+        perf.commit
     );
 
-    let elapsed = (t3 - t0).as_micros() as usize;
     state.statistics.payment_count.fetch_add(1, Relaxed);
-    state.statistics.payment_us.fetch_add(elapsed, Relaxed);
+    state
+        .statistics
+        .payment_us
+        .fetch_add(perflog.total_us(), Relaxed);
 
-    Ok(resp)
+    Ok(axum::Json(PaymentResponse { contents, perf }))
 }

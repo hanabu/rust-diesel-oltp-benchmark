@@ -1,18 +1,22 @@
 use crate::SpawnTransaction;
 use axum::extract;
+use if_types::OrderStatusResponse;
 
 /// Order-Status Transaction
 /// TPC-C standard spec. 2.6
 pub(crate) async fn order_status(
     extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Path((warehouse_id, district_id, customer_id)): extract::Path<(i32, i32, i32)>,
-) -> Result<axum::response::Json<if_types::OrderStatusResponse>, crate::Error> {
+) -> Result<axum::response::Json<OrderStatusResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    let t0 = std::time::Instant::now();
-    let (resp, t1, t2) = state
+
+    let perflog = crate::PerformanceLog::new();
+    let (contents, mut perflog) = state
         .pool
         .spawn_read_transaction(move |conn| {
-            let t1 = std::time::Instant::now();
+            let mut perflog = perflog;
+            perflog.begin();
+
             // Search customer by ID
             let customer =
                 tpcc_models::Customer::find(warehouse_id, district_id, customer_id, conn)?;
@@ -41,40 +45,37 @@ pub(crate) async fn order_status(
                         lines: lines,
                     };
 
-                    let t2 = std::time::Instant::now();
+                    perflog.finish();
                     Ok::<_, crate::Error>((
-                        axum::Json(if_types::OrderStatusResponse {
+                        if_types::OrderStatusContents {
                             orders: vec![order],
-                        }),
-                        t1,
-                        t2,
+                        },
+                        perflog,
                     ))
                 }
                 Err(tpcc_models::QueryError::NotFound) => {
-                    let t2 = std::time::Instant::now();
-                    Ok((
-                        axum::Json(if_types::OrderStatusResponse { orders: vec![] }),
-                        t1,
-                        t2,
-                    ))
+                    perflog.finish();
+                    Ok((if_types::OrderStatusContents { orders: vec![] }, perflog))
                 }
                 Err(e) => Err(e)?,
             }
         })
         .await?;
 
-    let t3 = std::time::Instant::now();
+    perflog.commit();
+    let perf = perflog.to_performance_metric();
     log::debug!(
-        "order_status() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-        (t1 - t0).as_secs_f32(),
-        (t2 - t1).as_secs_f32(),
-        (t3 - t2).as_secs_f32(),
-        (t3 - t0).as_secs_f32(),
+        "order_status() : Begin {:.03}s, Query {:.03}s, Commit {:03}s",
+        perf.begin,
+        perf.query,
+        perf.commit
     );
 
-    let elapsed = (t3 - t0).as_micros() as usize;
     state.statistics.order_status_count.fetch_add(1, Relaxed);
-    state.statistics.order_status_us.fetch_add(elapsed, Relaxed);
+    state
+        .statistics
+        .order_status_us
+        .fetch_add(perflog.total_us(), Relaxed);
 
-    Ok(resp)
+    Ok(axum::Json(OrderStatusResponse { contents, perf }))
 }

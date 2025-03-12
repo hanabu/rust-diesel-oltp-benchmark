@@ -9,13 +9,17 @@ pub(crate) async fn new_order(
     extract::Json(params): extract::Json<NewOrderRequest>,
 ) -> Result<axum::response::Json<NewOrderResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    let t0 = std::time::Instant::now();
-    let (resp, t1, t2) = state
+
+    let perflog = crate::PerformanceLog::new();
+
+    let (contents, mut perflog) = state
         .pool
         .spawn_write_transaction(move |conn| {
             use tpcc_models::Warehouse;
 
-            let t1 = std::time::Instant::now();
+            let mut perflog = perflog;
+            perflog.begin();
+
             // Transaction described in TPC-C standard spec. 2.4.2
             let warehouse = Warehouse::find(params.warehouse_id, conn)?;
             let mut district = warehouse.find_district(params.district_id, conn)?;
@@ -43,30 +47,32 @@ pub(crate) async fn new_order(
                 * (1.0 + warehouse.tax() + district.tax());
 
             let (warehouse_id, district_id, order_id) = order.id();
-            let resp = NewOrderResponse {
+            let resp = if_types::NewOrderContents {
                 warehouse_id,
                 district_id,
                 order_id,
                 total_amount,
             };
 
-            let t2 = std::time::Instant::now();
-            Ok::<_, crate::Error>((axum::Json(resp), t1, t2))
+            perflog.finish();
+            Ok::<_, crate::Error>((resp, perflog))
         })
         .await?;
 
-    let t3 = std::time::Instant::now();
+    perflog.commit();
+    let perf = perflog.to_performance_metric();
     log::debug!(
-        "new_order() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-        (t1 - t0).as_secs_f32(),
-        (t2 - t1).as_secs_f32(),
-        (t3 - t2).as_secs_f32(),
-        (t3 - t0).as_secs_f32(),
+        "new_order() : Begin {:.03}s, Query {:.03}s, Commit {:03}s",
+        perf.begin,
+        perf.query,
+        perf.commit
     );
 
-    let elapsed = (t3 - t0).as_micros() as usize;
     state.statistics.new_order_count.fetch_add(1, Relaxed);
-    state.statistics.new_order_us.fetch_add(elapsed, Relaxed);
+    state
+        .statistics
+        .new_order_us
+        .fetch_add(perflog.total_us(), Relaxed);
 
-    Ok(resp)
+    Ok(axum::Json(NewOrderResponse { contents, perf }))
 }

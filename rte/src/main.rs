@@ -390,7 +390,7 @@ async fn order_status_req(
     log::debug!(
         "Order-Status succeeded in {:.03}s, {} order found.",
         t.elapsed().as_secs_f32(),
-        resp.orders.len()
+        resp.contents.orders.len()
     );
 
     Ok(true)
@@ -421,10 +421,10 @@ async fn delivery_req(
     log::debug!(
         "Delivery succeeded in {:.03}s, {} orders delivered.",
         t.elapsed().as_secs_f32(),
-        resp.deliverd_orders
+        resp.contents.deliverd_orders
     );
 
-    Ok(resp.deliverd_orders)
+    Ok(resp.contents.deliverd_orders)
 }
 
 /// Stock-Level Transaction
@@ -453,7 +453,7 @@ async fn stock_level_req(
             "Stock-Level succeeded in {:.03}s, in district {}, {} low stocks found.",
             t.elapsed().as_secs_f32(),
             district_id,
-            resp.low_stocks
+            resp.contents.low_stocks
         );
     }
     Ok(true)
@@ -478,7 +478,11 @@ async fn customer_id_by_lastname(
         })
         .send()
         .await?;
-    let customers = resp.json::<if_types::CustomersResponse>().await?.customers;
+    let customers = resp
+        .json::<if_types::CustomersResponse>()
+        .await?
+        .contents
+        .customers;
     let customer = &customers[customers.len() / 2];
     log::debug!("Customer by lastname in {:.03}s", t.elapsed().as_secs_f32());
 

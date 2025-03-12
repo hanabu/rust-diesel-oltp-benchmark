@@ -1,19 +1,19 @@
 use crate::SpawnTransaction;
 use axum::extract;
-use if_types::CustomersResponse;
 
 /// for Debug
 pub(crate) async fn customer_by_id(
     extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Path((warehouse_id, district_id, customer_id)): extract::Path<(i32, i32, i32)>,
-) -> Result<axum::response::Json<if_types::Customer>, crate::Error> {
+) -> Result<axum::response::Json<if_types::CustomersResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
 
-    let t0 = std::time::Instant::now();
-    let (resp, t1, t2) = state
+    let perflog = crate::PerformanceLog::new();
+    let (contents, mut perflog) = state
         .pool
         .spawn_read_transaction(move |conn| {
-            let t1 = std::time::Instant::now();
+            let mut perflog = perflog;
+            perflog.begin();
 
             // Search customer by ID
             let db_customer =
@@ -29,28 +29,33 @@ pub(crate) async fn customer_by_id(
                 lastname: db_customer.lastname().to_string(),
             };
 
-            let t2 = std::time::Instant::now();
-            Ok::<_, crate::Error>((axum::Json(customer), t1, t2))
+            perflog.finish();
+            Ok::<_, crate::Error>((
+                if_types::CustomersContents {
+                    customers: vec![customer],
+                },
+                perflog,
+            ))
         })
         .await?;
 
-    let t3 = std::time::Instant::now();
+    perflog.commit();
+    let perf = perflog.to_performance_metric();
+
     log::debug!(
-        "customer_by_id() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-        (t1 - t0).as_secs_f32(),
-        (t2 - t1).as_secs_f32(),
-        (t3 - t2).as_secs_f32(),
-        (t3 - t0).as_secs_f32(),
+        "customer_by_id() : Begin {:.03}s, Query {:.03}s, Commit {:03}s",
+        perf.begin,
+        perf.query,
+        perf.commit
     );
 
-    let elapsed = (t3 - t0).as_micros() as usize;
     state.statistics.customer_by_id_count.fetch_add(1, Relaxed);
     state
         .statistics
         .customer_by_id_us
-        .fetch_add(elapsed, Relaxed);
+        .fetch_add(perflog.total_us(), Relaxed);
 
-    Ok(resp)
+    Ok(axum::Json(if_types::CustomersResponse { contents, perf }))
 }
 
 /// Customer by last name, used in Payment, Order-Status Transaction
@@ -58,13 +63,16 @@ pub(crate) async fn customer_by_id(
 pub(crate) async fn customer_by_lastname(
     extract::State(state): extract::State<std::sync::Arc<super::AppState>>,
     extract::Query(params): extract::Query<if_types::CustomersByLastnameParams>,
-) -> Result<axum::response::Json<CustomersResponse>, crate::Error> {
+) -> Result<axum::response::Json<if_types::CustomersResponse>, crate::Error> {
     use std::sync::atomic::Ordering::Relaxed;
-    let t0 = std::time::Instant::now();
-    let (resp, t1, t2) = state
+
+    let perflog = crate::PerformanceLog::new();
+    let (contents, mut perflog) = state
         .pool
         .spawn_read_transaction(move |conn| {
-            let t1 = std::time::Instant::now();
+            let mut perflog = perflog;
+            perflog.begin();
+
             // Search customer by lastname
             let db_customers = tpcc_models::Customer::find_by_name(
                 params.warehouse_id,
@@ -88,25 +96,20 @@ pub(crate) async fn customer_by_lastname(
                 })
                 .collect::<Vec<_>>();
 
-            let t2 = std::time::Instant::now();
-            Ok::<_, crate::Error>((
-                axum::Json(if_types::CustomersResponse { customers }),
-                t1,
-                t2,
-            ))
+            perflog.finish();
+            Ok::<_, crate::Error>((if_types::CustomersContents { customers }, perflog))
         })
         .await?;
 
-    let t3 = std::time::Instant::now();
+    perflog.commit();
+    let perf = perflog.to_performance_metric();
     log::debug!(
-        "customer_by_lastname() : Begin {:.03}s, Query {:.03}s, Commit {:03}s, Total {:03}s",
-        (t1 - t0).as_secs_f32(),
-        (t2 - t1).as_secs_f32(),
-        (t3 - t2).as_secs_f32(),
-        (t3 - t0).as_secs_f32(),
+        "customer_by_lastname() : Begin {:.03}s, Query {:.03}s, Commit {:03}s",
+        perf.begin,
+        perf.query,
+        perf.commit,
     );
 
-    let elapsed = (t3 - t0).as_micros() as usize;
     state
         .statistics
         .customer_by_name_count
@@ -114,7 +117,7 @@ pub(crate) async fn customer_by_lastname(
     state
         .statistics
         .customer_by_name_us
-        .fetch_add(elapsed, Relaxed);
+        .fetch_add(perflog.total_us(), Relaxed);
 
-    Ok(resp)
+    Ok(axum::Json(if_types::CustomersResponse { contents, perf }))
 }
