@@ -97,9 +97,11 @@ impl EndpointUrls {
     pub fn customer_by_lastname(&self) -> url::Url {
         self.customer.clone()
     }
+    /*
     pub fn status(&self) -> url::Url {
         self.base.clone()
     }
+    */
 }
 
 #[tokio::main]
@@ -165,51 +167,71 @@ async fn run(args: RunArgs) -> Result<(), Error> {
     let end_t = start_t + std::time::Duration::from_secs_f32(args.duration);
     let term_t = end_t + std::time::Duration::from_secs(5);
 
+    let perf: [PerfSummary; 6] = Default::default();
     log::info!("Start benchmark");
     let futs = (0..(args.concurrent)).map(|_i| async {
-        benchmark_single_terminal(start_t, end_t, term_t, 1, &endpoints, &client).await
+        benchmark_single_terminal(start_t, end_t, term_t, 1, &perf, &endpoints, &client).await
     });
     let counts = futures::future::try_join_all(futs).await?;
     log::info!("Finished");
 
     let total_counts = counts.into_iter().sum::<i32>();
     println!(
-        "{:.1} tpm = {} new_order transactions in {:.3} secs",
+        "\n{:.1} tpm  ( {} new_order transactions in {:.3} secs )\n",
         (total_counts as f32) * 60.0 / args.duration,
         total_counts,
         args.duration,
     );
 
-    let st = status(&endpoints, &client).await?.statistics;
+    println!("##                calls , e2e total,  begin   ,  query   ,  commit");
+    println!("##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)");
     println!(
-        "new_order:        {:5} calls, {:.03}s/call",
-        st.new_order_count,
-        st.new_order_secs / st.new_order_count as f64
+        "new_order:        {:6}, {:9.06}, {:9.06}, {:9.06}, {:9.06}",
+        perf[0].counts(),
+        perf[0].avg_e2e(),
+        perf[0].avg_begin(),
+        perf[0].avg_query(),
+        perf[0].avg_commit(),
     );
     println!(
-        "payment:          {:5} calls, {:.03}s/call",
-        st.payment_count,
-        st.payment_secs / st.payment_count as f64
+        "payment:          {:6}, {:9.06}, {:9.06}, {:9.06}, {:9.06}",
+        perf[1].counts(),
+        perf[1].avg_e2e(),
+        perf[1].avg_begin(),
+        perf[1].avg_query(),
+        perf[1].avg_commit(),
     );
     println!(
-        "order_status:     {:5} calls, {:.03}s/call",
-        st.order_status_count,
-        st.order_status_secs / st.order_status_count as f64
+        "order_status:     {:6}, {:9.06}, {:9.06}, {:9.06}, {:9.06}",
+        perf[2].counts(),
+        perf[2].avg_e2e(),
+        perf[2].avg_begin(),
+        perf[2].avg_query(),
+        perf[2].avg_commit(),
     );
     println!(
-        "delivery:         {:5} calls, {:.03}s/call",
-        st.delivery_count,
-        st.delivery_secs / st.delivery_count as f64
+        "delivery:         {:6}, {:9.06}, {:9.06}, {:9.06}, {:9.06}",
+        perf[3].counts(),
+        perf[3].avg_e2e(),
+        perf[3].avg_begin(),
+        perf[3].avg_query(),
+        perf[3].avg_commit(),
     );
     println!(
-        "stock_level:      {:5} calls, {:.03}s/call",
-        st.stock_level_count,
-        st.stock_level_secs / st.stock_level_count as f64
+        "stock_level:      {:6}, {:9.06}, {:9.06}, {:9.06}, {:9.06}",
+        perf[4].counts(),
+        perf[4].avg_e2e(),
+        perf[4].avg_begin(),
+        perf[4].avg_query(),
+        perf[4].avg_commit(),
     );
     println!(
-        "customer_by_name: {:5} calls, {:.03}s/call",
-        st.customer_by_name_count,
-        st.customer_by_name_secs / st.customer_by_name_count as f64
+        "customer_by_name: {:6}, {:9.06}, {:9.06}, {:9.06}, {:9.06}",
+        perf[5].counts(),
+        perf[5].avg_e2e(),
+        perf[5].avg_begin(),
+        perf[5].avg_query(),
+        perf[5].avg_commit(),
     );
 
     Ok(())
@@ -220,6 +242,7 @@ async fn benchmark_single_terminal(
     end_t: std::time::Instant,
     term_t: std::time::Instant,
     warehouse_id: i32,
+    perf: &[PerfSummary; 6],
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
 ) -> Result<i32, Error> {
@@ -233,7 +256,7 @@ async fn benchmark_single_terminal(
         match counts % 25 {
             0 | 2 | 4 | 6 | 9 | 11 | 13 | 15 | 18 | 20 | 22 => {
                 // 44%
-                new_order_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+                new_order_req(warehouse_id, &perf[0], &endpoints, &client, &mut rand).await?;
                 // Only count up in benchmark period (excludes ramp-up, ramp-down)
                 let now = std::time::Instant::now();
                 if start_t <= now && now < end_t {
@@ -242,19 +265,35 @@ async fn benchmark_single_terminal(
             }
             1 | 3 | 5 | 7 | 10 | 12 | 14 | 16 | 19 | 21 | 23 => {
                 // 44%
-                payment_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+                payment_req(
+                    warehouse_id,
+                    &perf[1],
+                    &perf[5],
+                    &endpoints,
+                    &client,
+                    &mut rand,
+                )
+                .await?;
             }
             8 => {
                 // 4%
-                order_status_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+                order_status_req(
+                    warehouse_id,
+                    &perf[2],
+                    &perf[5],
+                    &endpoints,
+                    &client,
+                    &mut rand,
+                )
+                .await?;
             }
             17 => {
                 // 4%
-                delivery_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+                delivery_req(warehouse_id, &perf[3], &endpoints, &client, &mut rand).await?;
             }
             24 => {
                 // 4%
-                stock_level_req(warehouse_id, &endpoints, &client, &mut rand).await?;
+                stock_level_req(warehouse_id, &perf[4], &endpoints, &client, &mut rand).await?;
             }
             _ => {}
         }
@@ -267,6 +306,7 @@ async fn benchmark_single_terminal(
 /// TPC-C standard spec. 2.4
 async fn new_order_req(
     warehouse_id: i32,
+    perf: &PerfSummary,
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
@@ -295,8 +335,11 @@ async fn new_order_req(
     let t = std::time::Instant::now();
     let resp = client.post(endpoints.new_order()).json(&req).send().await?;
 
-    let _resp = resp.json::<if_types::NewOrderResponse>().await?;
-    log::debug!("New-Order succeeded in {:.03}s", t.elapsed().as_secs_f32());
+    let resp = resp.json::<if_types::NewOrderResponse>().await?;
+    let elapsed = t.elapsed();
+
+    perf.add(&resp.perf, elapsed);
+    log::debug!("New-Order succeeded in {:.03}s", elapsed.as_secs_f32());
 
     Ok(true)
 }
@@ -305,6 +348,8 @@ async fn new_order_req(
 /// TPC-C standard spec. 2.5
 async fn payment_req(
     warehouse_id: i32,
+    perf: &PerfSummary,
+    perf_c: &PerfSummary,
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
@@ -326,7 +371,15 @@ async fn payment_req(
         let name_idx = rand.non_uniform_i32(255, 0..=999);
         let lastname = tpcc_rand::TpcRandom::last_name(name_idx);
 
-        customer_id_by_lastname(warehouse_id, district_id, lastname, endpoints, client).await?
+        customer_id_by_lastname(
+            warehouse_id,
+            district_id,
+            lastname,
+            perf_c,
+            endpoints,
+            client,
+        )
+        .await?
     } else {
         // by id
         rand.non_uniform_i32(1023, 1..=3000)
@@ -346,11 +399,14 @@ async fn payment_req(
     let t = std::time::Instant::now();
     let resp = client.post(endpoints.payment()).json(&req).send().await?;
 
-    let _resp = resp
+    let resp = resp
         .error_for_status()?
         .json::<if_types::PaymentResponse>()
         .await?;
-    log::debug!("Payment succeeded in {:.03}s", t.elapsed().as_secs_f32());
+    let elapsed = t.elapsed();
+
+    perf.add(&resp.perf, elapsed);
+    log::debug!("Payment succeeded in {:.03}s", elapsed.as_secs_f32());
 
     Ok(true)
 }
@@ -359,6 +415,8 @@ async fn payment_req(
 /// TPC-C standard spec. 2.6
 async fn order_status_req(
     warehouse_id: i32,
+    perf: &PerfSummary,
+    perf_c: &PerfSummary,
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
@@ -371,7 +429,15 @@ async fn order_status_req(
         let name_idx = rand.non_uniform_i32(255, 0..=999);
         let lastname = tpcc_rand::TpcRandom::last_name(name_idx);
 
-        customer_id_by_lastname(warehouse_id, district_id, lastname, endpoints, client).await?
+        customer_id_by_lastname(
+            warehouse_id,
+            district_id,
+            lastname,
+            perf_c,
+            endpoints,
+            client,
+        )
+        .await?
     } else {
         // by id
         rand.non_uniform_i32(1023, 1..=3000)
@@ -387,9 +453,12 @@ async fn order_status_req(
         .error_for_status()?
         .json::<if_types::OrderStatusResponse>()
         .await?;
+    let elapsed = t.elapsed();
+
+    perf.add(&resp.perf, elapsed);
     log::debug!(
         "Order-Status succeeded in {:.03}s, {} order found.",
-        t.elapsed().as_secs_f32(),
+        elapsed.as_secs_f32(),
         resp.contents.orders.len()
     );
 
@@ -400,6 +469,7 @@ async fn order_status_req(
 /// TPC-C standard spec. 2.7
 async fn delivery_req(
     warehouse_id: i32,
+    perf: &PerfSummary,
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
@@ -418,9 +488,12 @@ async fn delivery_req(
         .error_for_status()?
         .json::<if_types::DeliveryResponse>()
         .await?;
+    let elapsed = t.elapsed();
+
+    perf.add(&resp.perf, elapsed);
     log::debug!(
         "Delivery succeeded in {:.03}s, {} orders delivered.",
-        t.elapsed().as_secs_f32(),
+        elapsed.as_secs_f32(),
         resp.contents.deliverd_orders
     );
 
@@ -431,6 +504,7 @@ async fn delivery_req(
 /// TPC-C standard spec. 2.8
 async fn stock_level_req(
     warehouse_id: i32,
+    perf: &PerfSummary,
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
     rand: &mut tpcc_rand::TpcRandom,
@@ -449,9 +523,12 @@ async fn stock_level_req(
             .error_for_status()?
             .json::<if_types::StockLevelResponse>()
             .await?;
+        let elapsed = t.elapsed();
+
+        perf.add(&resp.perf, elapsed);
         log::debug!(
             "Stock-Level succeeded in {:.03}s, in district {}, {} low stocks found.",
-            t.elapsed().as_secs_f32(),
+            elapsed.as_secs_f32(),
             district_id,
             resp.contents.low_stocks
         );
@@ -464,6 +541,7 @@ async fn customer_id_by_lastname(
     warehouse_id: i32,
     district_id: i32,
     lastname: String,
+    perf: &PerfSummary,
     endpoints: &EndpointUrls,
     client: &reqwest::Client,
 ) -> Result<i32, Error> {
@@ -478,17 +556,18 @@ async fn customer_id_by_lastname(
         })
         .send()
         .await?;
-    let customers = resp
-        .json::<if_types::CustomersResponse>()
-        .await?
-        .contents
-        .customers;
+    let resp = resp.json::<if_types::CustomersResponse>().await?;
+    let elapsed = t.elapsed();
+    perf.add(&resp.perf, elapsed);
+
+    let customers = resp.contents.customers;
     let customer = &customers[customers.len() / 2];
-    log::debug!("Customer by lastname in {:.03}s", t.elapsed().as_secs_f32());
+    log::debug!("Customer by lastname in {:.03}s", elapsed.as_secs_f32());
 
     Ok(customer.customer_id)
 }
 
+/*
 /// Query benchmark status
 async fn status(
     endpoints: &EndpointUrls,
@@ -499,4 +578,55 @@ async fn status(
     let status = resp.json::<if_types::DbStatusResponse>().await?;
 
     Ok(status)
+}
+*/
+
+#[derive(Default)]
+struct PerfSummary {
+    counts: std::sync::atomic::AtomicUsize,
+    begin_us: std::sync::atomic::AtomicUsize,
+    query_us: std::sync::atomic::AtomicUsize,
+    commit_us: std::sync::atomic::AtomicUsize,
+    e2e_total_us: std::sync::atomic::AtomicUsize,
+}
+
+impl PerfSummary {
+    fn add(&self, perf: &if_types::PerformanceMetrics, e2e: std::time::Duration) {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        self.counts.fetch_add(1, Relaxed);
+        self.begin_us
+            .fetch_add((perf.begin * 1_000_000.0) as usize, Relaxed);
+        self.query_us
+            .fetch_add((perf.query * 1_000_000.0) as usize, Relaxed);
+        self.commit_us
+            .fetch_add((perf.commit * 1_000_000.0) as usize, Relaxed);
+        self.e2e_total_us
+            .fetch_add(e2e.as_micros() as usize, Relaxed);
+    }
+
+    fn counts(&self) -> usize {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.counts.load(Relaxed)
+    }
+
+    fn avg_begin(&self) -> f64 {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.begin_us.load(Relaxed) as f64) / (self.counts.load(Relaxed) as f64) * 0.000_001
+    }
+
+    fn avg_query(&self) -> f64 {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.query_us.load(Relaxed) as f64) / (self.counts.load(Relaxed) as f64) * 0.000_001
+    }
+
+    fn avg_commit(&self) -> f64 {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.commit_us.load(Relaxed) as f64) / (self.counts.load(Relaxed) as f64) * 0.000_001
+    }
+
+    fn avg_e2e(&self) -> f64 {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.e2e_total_us.load(Relaxed) as f64) / (self.counts.load(Relaxed) as f64) * 0.000_001
+    }
 }
