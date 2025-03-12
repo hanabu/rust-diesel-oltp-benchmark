@@ -43,16 +43,19 @@ $ cargo run -- run -c 1 -d 30 http://localhost:3000
 ...
 [INFO rte] Start benchmark
 [INFO rte] Finished
-1426.0 tpm = 713 new_order transactions in 30.000 secs
-new_order: 932 calls, 0.023s/call
-payment: 931 calls, 0.008s/call
-order_status: 85 calls, 0.003s/call
-delivery: 84 calls, 0.042s/call
-stock_level: 840 calls, 0.003s/call
-customer_by_name: 584 calls, 0.002s/call
+2403.0 tpm  ( 2403 new_order transactions in 60.000 secs )
+
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:          2817,  0.011591,  0.000069,  0.001447,  0.009043
+payment:            2816,  0.009881,  0.000063,  0.000538,  0.008327
+order_status:        256,  0.002263,  0.000043,  0.001324,  0.000070
+delivery:            256,  0.012014,  0.000069,  0.001776,  0.009159
+stock_level:        2560,  0.001402,  0.000040,  0.000624,  0.000071
+customer_by_name:   1828,  0.001150,  0.000048,  0.000160,  0.000069
 ```
 
-`1426.0 tpm` is the benchmark result indicator. The TPC-C standard measures the number of new\_order executions per minute when five transactions (new\_order, payment, order\_status, delivery, and stock\_level) are called at a certain rate. \
+Command example above shows `2403.0 tpm` as the benchmark result indicator. The TPC-C standard measures the number of new\_order executions per minute when five transactions (new\_order, payment, order\_status, delivery, and stock\_level) are called at a certain rate. \
  The number of new\_order executions per minute is used as an indicator.
 
 ##  Compliance with TPC-C standards
@@ -70,21 +73,25 @@ customer_by_name: 584 calls, 0.002s/call
 
  Compared to running on a PC with SSD, the performance is about 1/10 to 1/20 when running on EFS, a network file system. It is slow in comparison, but not unusable.
 
-    126.0 tpm = 126 new_order transactions in 60.000 secs
-    new_order: 143 calls, 0.189s/call
-    payment: 143 calls, 0.118s/call
-    order_status: 13 calls, 0.065s/call
-    delivery: 13 calls, 0.437s/call
-    stock_level: 130 calls, 0.061s/call
-    customer_by_name: 85 calls, 0.045s/call
+```
+149.0 tpm  ( 149 new_order transactions in 60.000 secs )
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:           172,  0.179153,  0.025044,  0.055892,  0.080491
+payment:             171,  0.107907,  0.024298,  0.008262,  0.060720
+order_status:         16,  0.080568,  0.000043,  0.062220,  0.004832
+delivery:             15,  0.186698,  0.025183,  0.017058,  0.129534
+stock_level:         150,  0.071711,  0.000042,  0.052575,  0.004807
+customer_by_name:    108,  0.055207,  0.000041,  0.034713,  0.005373
+```
 
- Benchmark run: 442 transactions in 70 seconds, EFS burst credit consumed 102.3MB, SQLite database file size is about 90MB.
+Benchmark run: 524 transactions in 70 seconds, EFS burst credit consumed 105MB, SQLite database file size is about 90MB.
 
- Conditions are as follows:
+Conditions are as follows:
 
 -  AWS ap-northeast-1 Tokyo region
 -  SUT execution environment : AWS Lambda Arm64, 1792MB, AmazonLinux 2023 runtime
--  RTE configuration : Scale factor=1, 1 parallel
+-  RTE configuration : Scale factor=1, 1 concurrent
 -  EFS: burst throughput mode
 -  SQLite-3.48.0, Diesel-2.2.8, Rust-1.85.0
 
