@@ -77,8 +77,8 @@ pub fn prepare(scale_factor: i32, conn: &mut WrConnection) -> diesel::migration:
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::items)]
 pub struct Item {
-    i_id: i32,
-    i_im_id: i32,
+    i_id: i64,
+    i_im_id: i64,
     i_name: String,
     i_price: f64,
     i_data: String,
@@ -101,15 +101,15 @@ impl Item {
         use schema::items;
         let cur_id = items::table
             .select(diesel::dsl::max(items::i_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_items = (0..num)
             .map(|i| {
                 // TPC-C standard spec. 4.3.3
                 Self {
-                    i_id: cur_id + i + 1,
-                    i_im_id: rand.i32_range(1..=10_000),
+                    i_id: cur_id + i as i64 + 1,
+                    i_im_id: rand.i32_range(1..=10_000) as i64,
                     i_name: rand.alnum_string(14..=24),
                     i_price: rand.f64_range(1.00..=100.00),
                     i_data: rand.item_data(),
@@ -128,7 +128,7 @@ impl Item {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::warehouses)]
 pub struct Warehouse {
-    w_id: i32,
+    w_id: i64,
     w_name: String,
     w_street_1: String,
     w_street_2: String,
@@ -142,7 +142,7 @@ pub struct Warehouse {
 impl Warehouse {
     /// Get Warehouse by it's id
     pub fn find(id: i32, conn: &mut RdConnection) -> QueryResult<Self> {
-        schema::warehouses::table.find(id).first(conn.as_db())
+        schema::warehouses::table.find(id as i64).first(conn.as_db())
     }
 
     /// Get District
@@ -151,12 +151,12 @@ impl Warehouse {
         district_id: i32,
         conn: &mut RdConnection,
     ) -> QueryResult<District> {
-        District::find(self.w_id, district_id, conn)
+        District::find(self.w_id as i32, district_id, conn)
     }
 
     /// All districts under this warehouse
     pub fn all_districts(&self, conn: &mut RdConnection) -> QueryResult<Vec<District>> {
-        District::all_by_warehouse(self.w_id, conn)
+        District::all_by_warehouse(self.w_id as i32, conn)
     }
 
     /// Get tax rate of the warehouse
@@ -176,7 +176,7 @@ impl Warehouse {
         use schema::warehouses;
         let cur_id = warehouses::table
             .select(diesel::dsl::max(warehouses::w_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         // TPC-C standard spec. 4.3.3
@@ -206,7 +206,7 @@ impl Warehouse {
         rand: &mut tpcc_rand::TpcRandom,
         conn: &mut WrConnection,
     ) -> QueryResult<Vec<Stock>> {
-        Stock::prepare(self.w_id, num, rand, conn)
+        Stock::prepare(self.w_id as i32, num, rand, conn)
     }
 
     /// Insert district in warehouse
@@ -217,7 +217,7 @@ impl Warehouse {
         rand: &mut tpcc_rand::TpcRandom,
         conn: &mut WrConnection,
     ) -> QueryResult<Vec<District>> {
-        District::prepare(self.w_id, num, rand, conn)
+        District::prepare(self.w_id as i32, num, rand, conn)
     }
 }
 
@@ -225,9 +225,9 @@ impl Warehouse {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::stocks)]
 pub struct Stock {
-    s_i_id: i32,
-    s_w_id: i32,
-    s_quantity: i32,
+    s_i_id: i64,
+    s_w_id: i64,
+    s_quantity: i64,
     s_dist_01: String,
     s_dist_02: String,
     s_dist_03: String,
@@ -238,9 +238,9 @@ pub struct Stock {
     s_dist_08: String,
     s_dist_09: String,
     s_dist_10: String,
-    s_ytd: i32,
-    s_order_cnt: i32,
-    s_remote_cnt: i32,
+    s_ytd: i64,
+    s_order_cnt: i64,
+    s_remote_cnt: i64,
     s_data: String,
 }
 
@@ -254,13 +254,13 @@ impl Stock {
         conn: &mut WrConnection,
     ) -> QueryResult<Self> {
         use schema::stocks;
-        let new_qty = if self.s_quantity > quantity + 10 {
-            self.s_quantity - quantity
+        let new_qty = if self.s_quantity > quantity as i64 + 10 {
+            self.s_quantity - quantity as i64
         } else {
-            self.s_quantity - quantity + 91
+            self.s_quantity - quantity as i64 + 91
         };
 
-        let remote_inc = if self.s_w_id == order_by_warehouse_id {
+        let remote_inc = if self.s_w_id == order_by_warehouse_id as i64 {
             0 // home order
         } else {
             1 // remote order
@@ -272,7 +272,7 @@ impl Stock {
         let updated_stock = diesel::update(row)
             .set((
                 stocks::s_quantity.eq(new_qty),
-                stocks::s_ytd.eq(stocks::s_ytd + quantity),
+                stocks::s_ytd.eq(stocks::s_ytd + quantity as i64),
                 stocks::s_order_cnt.eq(stocks::s_order_cnt + 1),
                 stocks::s_remote_cnt.eq(stocks::s_remote_cnt + remote_inc),
             ))
@@ -298,18 +298,18 @@ impl Stock {
     ) -> QueryResult<Vec<Self>> {
         use schema::stocks;
         let cur_id = stocks::table
-            .filter(stocks::s_w_id.eq(warehouse_id))
+            .filter(stocks::s_w_id.eq(warehouse_id as i64))
             .select(diesel::dsl::max(stocks::s_i_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_stocks = (0..num)
             .map(|i| {
                 // TPC-C standard spec. 4.3.3
                 Self {
-                    s_i_id: cur_id + i + 1,
-                    s_w_id: warehouse_id,
-                    s_quantity: rand.i32_range(10..=100),
+                    s_i_id: cur_id + i as i64 + 1,
+                    s_w_id: warehouse_id as i64,
+                    s_quantity: rand.i32_range(10..=100) as i64,
                     s_dist_01: rand.alnum_string(24..=24),
                     s_dist_02: rand.alnum_string(24..=24),
                     s_dist_03: rand.alnum_string(24..=24),
@@ -344,10 +344,10 @@ pub struct StockedItem {
 impl StockedItem {
     pub fn find(warehouse_id: i32, item_id: i32, conn: &mut RdConnection) -> QueryResult<Self> {
         use schema::{items, stocks};
-        let item = items::table.find(item_id).first::<Item>(conn.as_db())?;
+        let item = items::table.find(item_id as i64).first::<Item>(conn.as_db())?;
         let stock = stocks::table
-            .filter(stocks::s_w_id.eq(warehouse_id))
-            .filter(stocks::s_i_id.eq(item_id))
+            .filter(stocks::s_w_id.eq(warehouse_id as i64))
+            .filter(stocks::s_i_id.eq(item_id as i64))
             .first::<Stock>(conn.as_db())?;
 
         Ok(Self { item, stock })
@@ -358,8 +358,8 @@ impl StockedItem {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::districts)]
 pub struct District {
-    d_id: i32,
-    d_w_id: i32,
+    d_id: i64,
+    d_w_id: i64,
     d_name: String,
     d_street_1: String,
     d_street_2: String,
@@ -368,7 +368,7 @@ pub struct District {
     d_zip: String,
     d_tax: f64,
     d_ytd: f64,
-    d_next_o_id: i32,
+    d_next_o_id: i64,
 }
 
 impl District {
@@ -377,8 +377,8 @@ impl District {
     fn find(warehouse_id: i32, district_id: i32, conn: &mut RdConnection) -> QueryResult<Self> {
         use schema::districts;
         districts::table
-            .filter(districts::d_w_id.eq(warehouse_id))
-            .filter(districts::d_id.eq(district_id))
+            .filter(districts::d_w_id.eq(warehouse_id as i64))
+            .filter(districts::d_id.eq(district_id as i64))
             .first(conn.as_db())
     }
 
@@ -387,7 +387,7 @@ impl District {
     fn all_by_warehouse(warehouse_id: i32, conn: &mut RdConnection) -> QueryResult<Vec<Self>> {
         use schema::districts;
         districts::table
-            .filter(districts::d_w_id.eq(warehouse_id))
+            .filter(districts::d_w_id.eq(warehouse_id as i64))
             .load(conn.as_db())
     }
 
@@ -402,7 +402,7 @@ impl District {
         customer_id: i32,
         conn: &mut RdConnection,
     ) -> QueryResult<Customer> {
-        Customer::find(self.d_w_id, self.d_id, customer_id, conn)
+        Customer::find(self.d_w_id as i32 , self.d_id as i32, customer_id, conn)
     }
 
     /// Add new order
@@ -417,11 +417,11 @@ impl District {
             // Run transaction
             let order_id = self.issue_order_id(conn)?;
             let (order, lines) =
-                Order::insert(self.d_w_id, self.d_id, order_id, customer, items, conn)?;
+                Order::insert(self.d_w_id as i32, self.d_id as i32, order_id, customer, items, conn)?;
 
             // allocate stock
             for (item, qty) in items {
-                item.stock.allocate(*qty, self.d_w_id, conn)?;
+                item.stock.allocate(*qty, self.d_w_id as i32, conn)?;
             }
             Ok((order, lines))
         })
@@ -442,7 +442,7 @@ impl District {
 
         self.d_next_o_id = next_id;
 
-        Ok(next_id - 1)
+        Ok(next_id as i32 - 1)
     }
 
     /// Delivery transaction
@@ -458,7 +458,7 @@ impl District {
                 .order(new_orders::no_o_id)
                 .select(new_orders::no_o_id)
                 .limit(10)
-                .load::<i32>(conn.as_db())?;
+                .load::<i64>(conn.as_db())?;
             // Remove new_orders to be delivered
             diesel::delete(
                 new_orders::table
@@ -474,7 +474,7 @@ impl District {
                     .filter(orders::o_d_id.eq(self.d_id))
                     .filter(orders::o_id.eq_any(order_ids)),
             )
-            .set(orders::o_carrier_id.eq(carrier_id))
+            .set(orders::o_carrier_id.eq(carrier_id as i64))
             .get_results(conn.as_db())?;
 
             let tm = chrono::Utc::now().naive_utc();
@@ -508,7 +508,7 @@ impl District {
     ) -> QueryResult<usize> {
         use schema::{order_lines, stocks};
 
-        let item_ids: Vec<i32> = order_lines::table
+        let item_ids: Vec<i64> = order_lines::table
             .filter(order_lines::ol_w_id.eq(self.d_w_id))
             .filter(order_lines::ol_d_id.eq(self.d_id))
             .filter(order_lines::ol_o_id.ge(self.d_next_o_id - 20))
@@ -519,7 +519,7 @@ impl District {
         let low_stocks: i64 = stocks::table
             .filter(stocks::s_w_id.eq(self.d_w_id))
             .filter(stocks::s_i_id.eq_any(&item_ids))
-            .filter(stocks::s_quantity.lt(stock_level))
+            .filter(stocks::s_quantity.lt(stock_level as i64))
             .select(diesel::dsl::count_distinct(stocks::s_i_id))
             .first(conn.as_db())?;
 
@@ -543,17 +543,17 @@ impl District {
     ) -> QueryResult<Vec<Self>> {
         use schema::districts;
         let cur_id = districts::table
-            .filter(districts::d_w_id.eq(warehouse_id))
+            .filter(districts::d_w_id.eq(warehouse_id as i64))
             .select(diesel::dsl::max(districts::d_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_districts = (0..num)
             .map(|i| {
                 // TPC-C standard spec. 4.3.3
                 Self {
-                    d_id: cur_id + i + 1,
-                    d_w_id: warehouse_id,
+                    d_id: cur_id + i as i64 + 1,
+                    d_w_id: warehouse_id as i64,
                     d_name: rand.alnum_string(6..=10),
                     d_street_1: rand.alnum_string(10..=20),
                     d_street_2: rand.alnum_string(10..=20),
@@ -581,7 +581,7 @@ impl District {
         rand: &mut tpcc_rand::TpcRandom,
         conn: &mut WrConnection,
     ) -> QueryResult<Vec<Customer>> {
-        Customer::prepare(self.d_w_id, self.d_id, num, rand, conn)
+        Customer::prepare(self.d_w_id as i32 , self.d_id as i32, num, rand, conn)
     }
 
     /// Insert orders in district
@@ -592,16 +592,16 @@ impl District {
         rand: &mut tpcc_rand::TpcRandom,
         conn: &mut WrConnection,
     ) -> QueryResult<Vec<Order>> {
-        Order::prepare(self.d_w_id, self.d_id, num, rand, conn)
+        Order::prepare(self.d_w_id as i32, self.d_id as i32, num, rand, conn)
     }
 }
 
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::customers)]
 pub struct Customer {
-    c_id: i32,
-    c_d_id: i32,
-    c_w_id: i32,
+    c_id: i64,
+    c_d_id: i64,
+    c_w_id: i64,
     c_first: String,
     c_middle: String,
     c_last: String,
@@ -617,8 +617,8 @@ pub struct Customer {
     c_discount: f64,
     c_balance: f64,
     c_ytd_payment: f64,
-    c_payment_cnt: i32,
-    c_delivery_cnt: i32,
+    c_payment_cnt: i64,
+    c_delivery_cnt: i64,
     c_data: String,
 }
 
@@ -632,9 +632,9 @@ impl Customer {
     ) -> QueryResult<Self> {
         use schema::customers;
         customers::table
-            .filter(customers::c_w_id.eq(warehouse_id))
-            .filter(customers::c_d_id.eq(district_id))
-            .filter(customers::c_id.eq(customer_id))
+            .filter(customers::c_w_id.eq(warehouse_id as i64))
+            .filter(customers::c_d_id.eq(district_id as i64))
+            .filter(customers::c_id.eq(customer_id as i64))
             .first(conn.as_db())
     }
 
@@ -647,9 +647,9 @@ impl Customer {
     ) -> QueryResult<Vec<Self>> {
         use schema::customers;
         customers::table
-            .filter(customers::c_w_id.eq(warehouse_id))
-            .filter(customers::c_d_id.eq(district_id))
-            .filter(customers::c_last.eq(lastname))
+            .filter(customers::c_w_id.eq(warehouse_id as i64))
+            .filter(customers::c_d_id.eq(district_id as i64))
+            .filter(customers::c_last.eq(lastname ))
             .order(customers::c_first)
             .load::<Self>(conn.as_db())
     }
@@ -666,7 +666,7 @@ impl Customer {
 
         conn.transaction(move |mut conn| {
             // Increment warehouse ytd
-            let warehouse = diesel::update(warehouses::table.find(district_at.d_w_id))
+            let warehouse = diesel::update(warehouses::table.find(district_at.d_w_id as i64))
                 .set(warehouses::w_ytd.eq(warehouses::w_ytd + amount))
                 .get_result::<Warehouse>(conn.as_db())?;
             // Increment district ytd
@@ -699,22 +699,22 @@ impl Customer {
                 diesel::update(row)
                     .set((
                         customers::c_balance.eq(customers::c_balance - amount),
-                        customers::c_ytd_payment.eq(customers::c_ytd_payment + amount),
+                        customers::c_ytd_payment.eq(customers::c_ytd_payment + amount ),
                         customers::c_data.eq(new_c_data_trimed),
                     ))
                     .get_result::<Self>(conn.as_db())?
             } else {
                 diesel::update(row)
                     .set((
-                        customers::c_balance.eq(customers::c_balance - amount),
-                        customers::c_ytd_payment.eq(customers::c_ytd_payment + amount),
+                        customers::c_balance.eq(customers::c_balance - amount) ,
+                        customers::c_ytd_payment.eq(customers::c_ytd_payment + amount ),
                     ))
                     .get_result::<Self>(conn.as_db())?
             };
 
             // Insert history
             let history =
-                History::insert(&updated_customer, &warehouse, &district, amount, &mut conn)?;
+                History::insert(&updated_customer, &warehouse, &district, amount , &mut conn)?;
 
             Ok((updated_customer, history, district, warehouse))
         })
@@ -740,7 +740,7 @@ impl Customer {
 
     /// PK
     pub fn id(&self) -> (i32, i32, i32) {
-        (self.c_w_id, self.c_d_id, self.c_id)
+        (self.c_w_id as i32, self.c_d_id as i32, self.c_id as i32)
     }
 
     /// First name
@@ -777,15 +777,15 @@ impl Customer {
         use schema::{customers, histories};
 
         let cur_c_id = customers::table
-            .filter(customers::c_w_id.eq(warehouse_id))
-            .filter(customers::c_d_id.eq(district_id))
+            .filter(customers::c_w_id.eq(warehouse_id as i64))
+            .filter(customers::c_d_id.eq(district_id as i64))
             .select(diesel::dsl::max(customers::c_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         let prepared_customers = (0..num)
             .map(|i| {
-                let c_id = cur_c_id + i + 1;
+                let c_id = cur_c_id  + i as i64+ 1;
 
                 // TPC-C standard spec. 4.3.3
                 let c_credit = if 0 == rand.i32_range(0..=9) {
@@ -795,14 +795,14 @@ impl Customer {
                 }
                 .to_string();
                 let c_last = if 0 < c_id && c_id <= 1000 {
-                    tpcc_rand::TpcRandom::last_name(c_id - 1) // spec. 4.3.2.3
+                    tpcc_rand::TpcRandom::last_name(c_id as i32- 1) // spec. 4.3.2.3
                 } else {
                     tpcc_rand::TpcRandom::last_name(rand.non_uniform_i32(255, 0..=999))
                 };
                 Self {
                     c_id,
-                    c_d_id: district_id,
-                    c_w_id: warehouse_id,
+                    c_d_id: district_id as i64,
+                    c_w_id: warehouse_id as i64,
                     c_first: rand.alnum_string(8..=16),
                     c_middle: "OE".to_string(),
                     c_last,
@@ -831,7 +831,7 @@ impl Customer {
         // Also insert histories
         let cur_h_id = histories::table
             .select(diesel::dsl::max(histories::h_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
         let prepared_histories = prepared_customers
             .iter()
@@ -839,7 +839,7 @@ impl Customer {
             .map(|(i, customer)| {
                 // TPC-C standard spec. 4.3.3
                 History {
-                    h_id: cur_h_id + 1 + i as i32,
+                    h_id: cur_h_id + 1 + i as i64,
                     h_c_id: customer.c_id,
                     h_c_d_id: customer.c_d_id,
                     h_c_w_id: customer.c_w_id,
@@ -862,12 +862,12 @@ impl Customer {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::histories)]
 pub struct History {
-    h_id: i32,
-    h_c_id: i32,
-    h_c_d_id: i32,
-    h_c_w_id: i32,
-    h_d_id: i32,
-    h_w_id: i32,
+    h_id: i64,
+    h_c_id: i64,
+    h_c_d_id: i64,
+    h_c_w_id: i64,
+    h_d_id: i64,
+    h_w_id: i64,
     h_date: chrono::NaiveDateTime,
     h_amount: f64,
     h_data: String,
@@ -886,7 +886,7 @@ impl History {
         // max history_id
         let cur_h_id = histories::table
             .select(diesel::dsl::max(histories::h_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         let history = Self {
@@ -924,14 +924,14 @@ impl History {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::orders)]
 pub struct Order {
-    o_id: i32,
-    o_d_id: i32,
-    o_w_id: i32,
-    o_c_id: i32,
+    o_id: i64,
+    o_d_id: i64,
+    o_w_id: i64,
+    o_c_id: i64,
     o_entry_d: chrono::NaiveDateTime,
-    o_carrier_id: Option<i32>,
-    o_ol_cnt: i32,
-    o_all_local: i32,
+    o_carrier_id: Option<i64>,
+    o_ol_cnt: i64,
+    o_all_local: i64,
 }
 
 impl Order {
@@ -949,14 +949,14 @@ impl Order {
 
         // Order
         let insert_order = Self {
-            o_id: order_id,
-            o_d_id: district_id,
-            o_w_id: warehouse_id,
+            o_id: order_id as i64,
+            o_d_id: district_id as i64,
+            o_w_id: warehouse_id as i64,
             o_c_id: customer.c_id,
             o_entry_d: chrono::Utc::now().naive_utc(),
             o_carrier_id: None,
-            o_ol_cnt: items.len() as i32,
-            o_all_local: items.iter().all(|(s, _qty)| s.stock.s_w_id == warehouse_id) as i32,
+            o_ol_cnt: items.len() as i64,
+            o_all_local: items.iter().all(|(s, _qty)| s.stock.s_w_id == warehouse_id as i64) as i64,
         };
         diesel::insert_into(orders::table)
             .values(&insert_order)
@@ -964,9 +964,9 @@ impl Order {
 
         // NewOrder
         let insert_new_order = NewOrder {
-            no_o_id: order_id,
-            no_d_id: district_id,
-            no_w_id: warehouse_id,
+            no_o_id: order_id as i64,
+            no_d_id: district_id as i64,
+            no_w_id: warehouse_id as i64,
         };
         diesel::insert_into(new_orders::table)
             .values(&insert_new_order)
@@ -1019,7 +1019,7 @@ impl Order {
 
     /// PK
     pub fn id(&self) -> (i32, i32, i32) {
-        (self.o_w_id, self.o_d_id, self.o_id)
+        (self.o_w_id as i32, self.o_d_id as i32, self.o_id as i32)
     }
 
     pub fn entry_at(&self) -> chrono::NaiveDateTime {
@@ -1027,7 +1027,7 @@ impl Order {
     }
 
     pub fn carrier_id(&self) -> Option<i32> {
-        self.o_carrier_id
+        self.o_carrier_id.map(|id| id as i32)
     }
 
     /// Count all rows
@@ -1048,44 +1048,44 @@ impl Order {
     ) -> QueryResult<Vec<Self>> {
         use schema::{customers, new_orders, order_lines, orders};
         let cur_id = orders::table
-            .filter(orders::o_w_id.eq(warehouse_id))
-            .filter(orders::o_d_id.eq(district_id))
+            .filter(orders::o_w_id.eq(warehouse_id as i64))
+            .filter(orders::o_d_id.eq(district_id as i64))
             .select(diesel::dsl::max(orders::o_id))
-            .first::<Option<i32>>(conn.as_db())?
+            .first::<Option<i64>>(conn.as_db())?
             .unwrap_or(0);
 
         // min-max customer ID
         let (min_c_id, max_c_id) = customers::table
-            .filter(customers::c_w_id.eq(warehouse_id))
-            .filter(customers::c_d_id.eq(district_id))
+            .filter(customers::c_w_id.eq(warehouse_id as i64))
+            .filter(customers::c_d_id.eq(district_id as i64))
             .select((
                 diesel::dsl::min(customers::c_id),
                 diesel::dsl::max(customers::c_id),
             ))
-            .first::<(Option<i32>, Option<i32>)>(conn.as_db())?;
+            .first::<(Option<i64>, Option<i64>)>(conn.as_db())?;
 
-        let min_c_id = min_c_id.unwrap_or(0);
-        let max_c_id = max_c_id.unwrap_or(0);
+        let min_c_id = min_c_id.unwrap_or(0) as i32;
+        let max_c_id = max_c_id.unwrap_or(0) as i32;
 
         // Orders
         let prepared_orders = (0..num)
             .map(|i| {
                 // TPC-C standard spec. 4.3.3
-                let o_id = cur_id + i + 1;
+                let o_id = cur_id + i as i64 + 1;
                 let o_carrier_id = if o_id <= 2100 {
-                    Some(rand.i32_range(1..=10))
+                    Some(rand.i32_range(1..=10)).map(|id| id as i64)
                 } else {
                     None
                 };
 
                 Self {
                     o_id,
-                    o_d_id: district_id,
-                    o_w_id: warehouse_id,
-                    o_c_id: rand.i32_range(min_c_id..=max_c_id),
+                    o_d_id: district_id as i64,
+                    o_w_id: warehouse_id as i64,
+                    o_c_id: rand.i32_range(min_c_id..=max_c_id) as i64,
                     o_entry_d: chrono::Utc::now().naive_utc(),
                     o_carrier_id,
-                    o_ol_cnt: rand.i32_range(5..=15),
+                    o_ol_cnt: rand.i32_range(5..=15) as i64,
                     o_all_local: 1,
                 }
             })
@@ -1114,7 +1114,7 @@ impl Order {
                         ol_d_id: order.o_d_id,
                         ol_w_id: order.o_w_id,
                         ol_number: i,
-                        ol_i_id: rand.i32_range(1..=100_000),
+                        ol_i_id: rand.i32_range(1..=100_000) as i64,
                         ol_supply_w_id: order.o_w_id,
                         ol_delivery_d: ol_delivery_id,
                         ol_quantity: 5,
@@ -1155,14 +1155,14 @@ impl Order {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::order_lines)]
 pub struct OrderLine {
-    ol_o_id: i32,
-    ol_d_id: i32,
-    ol_w_id: i32,
-    ol_number: i32,
-    ol_i_id: i32,
-    ol_supply_w_id: i32,
+    ol_o_id: i64,
+    ol_d_id: i64,
+    ol_w_id: i64,
+    ol_number: i64,
+    ol_i_id: i64,
+    ol_supply_w_id: i64,
     ol_delivery_d: Option<chrono::NaiveDateTime>,
-    ol_quantity: i32,
+    ol_quantity: i64,
     ol_amount: f64,
     ol_dist_info: String,
 }
@@ -1192,14 +1192,14 @@ impl OrderLine {
         };
 
         Self {
-            ol_o_id: order_id,
+            ol_o_id: order_id as i64,
             ol_d_id: customer.c_d_id,
             ol_w_id: customer.c_w_id,
-            ol_number: index,
+            ol_number: index as i64,
             ol_i_id: item.item.i_id,
             ol_supply_w_id: item.stock.s_w_id,
             ol_delivery_d: None,
-            ol_quantity: quantity,
+            ol_quantity: quantity as i64,
             ol_amount: quantity as f64 * item.item.i_price,
             ol_dist_info: dist_info.to_string(),
         }
@@ -1207,16 +1207,16 @@ impl OrderLine {
 
     /// Item ID
     pub fn item_id(&self) -> i32 {
-        self.ol_i_id
+        self.ol_i_id as i32
     }
 
     /// Supply warehouse
     pub fn supply_warehouse_id(&self) -> i32 {
-        self.ol_supply_w_id
+        self.ol_supply_w_id as i32
     }
 
     pub fn quantity(&self) -> i32 {
-        self.ol_quantity
+        self.ol_quantity as i32
     }
 
     pub fn amount(&self) -> f64 {
@@ -1231,7 +1231,7 @@ impl OrderLine {
 #[derive(Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = schema::new_orders)]
 struct NewOrder {
-    no_o_id: i32,
-    no_d_id: i32,
-    no_w_id: i32,
+    no_o_id: i64,
+    no_d_id: i64,
+    no_w_id: i64,
 }

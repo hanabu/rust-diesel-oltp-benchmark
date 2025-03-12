@@ -2,9 +2,9 @@
 
 diesel::table! {
     customers (c_w_id, c_d_id, c_id) {
-        c_id -> Int4,
-        c_d_id -> Int4,
-        c_w_id -> Int4,
+        c_id -> Int8,
+        c_d_id -> Int8,
+        c_w_id -> Int8,
         c_first -> Text,
         c_middle -> Text,
         c_last -> Text,
@@ -20,16 +20,16 @@ diesel::table! {
         c_discount -> Float8,
         c_balance -> Float8,
         c_ytd_payment -> Float8,
-        c_payment_cnt -> Int4,
-        c_delivery_cnt -> Int4,
+        c_payment_cnt -> Int8,
+        c_delivery_cnt -> Int8,
         c_data -> Text,
     }
 }
 
 diesel::table! {
     districts (d_w_id, d_id) {
-        d_id -> Int4,
-        d_w_id -> Int4,
+        d_id -> Int8,
+        d_w_id -> Int8,
         d_name -> Text,
         d_street_1 -> Text,
         d_street_2 -> Text,
@@ -38,18 +38,18 @@ diesel::table! {
         d_zip -> Text,
         d_tax -> Float8,
         d_ytd -> Float8,
-        d_next_o_id -> Int4,
+        d_next_o_id -> Int8,
     }
 }
 
 diesel::table! {
     histories (h_id) {
-        h_id -> Int4,
-        h_c_id -> Int4,
-        h_c_d_id -> Int4,
-        h_c_w_id -> Int4,
-        h_d_id -> Int4,
-        h_w_id -> Int4,
+        h_id -> Int8,
+        h_c_id -> Int8,
+        h_c_d_id -> Int8,
+        h_c_w_id -> Int8,
+        h_d_id -> Int8,
+        h_w_id -> Int8,
         h_date -> Timestamp,
         h_amount -> Float8,
         h_data -> Text,
@@ -58,8 +58,8 @@ diesel::table! {
 
 diesel::table! {
     items (i_id) {
-        i_id -> Int4,
-        i_im_id -> Int4,
+        i_id -> Int8,
+        i_im_id -> Int8,
         i_name -> Text,
         i_price -> Float8,
         i_data -> Text,
@@ -68,22 +68,22 @@ diesel::table! {
 
 diesel::table! {
     new_orders (no_w_id, no_d_id, no_o_id) {
-        no_o_id -> Int4,
-        no_d_id -> Int4,
-        no_w_id -> Int4,
+        no_o_id -> Int8,
+        no_d_id -> Int8,
+        no_w_id -> Int8,
     }
 }
 
 diesel::table! {
     order_lines (ol_w_id, ol_d_id, ol_o_id, ol_number) {
-        ol_o_id -> Int4,
-        ol_d_id -> Int4,
-        ol_w_id -> Int4,
-        ol_number -> Int4,
-        ol_i_id -> Int4,
-        ol_supply_w_id -> Int4,
+        ol_o_id -> Int8,
+        ol_d_id -> Int8,
+        ol_w_id -> Int8,
+        ol_number -> Int8,
+        ol_i_id -> Int8,
+        ol_supply_w_id -> Int8,
         ol_delivery_d -> Nullable<Timestamp>,
-        ol_quantity -> Int4,
+        ol_quantity -> Int8,
         ol_amount -> Float8,
         ol_dist_info -> Text,
     }
@@ -91,22 +91,22 @@ diesel::table! {
 
 diesel::table! {
     orders (o_w_id, o_d_id, o_id) {
-        o_id -> Int4,
-        o_d_id -> Int4,
-        o_w_id -> Int4,
-        o_c_id -> Int4,
+        o_id -> Int8,
+        o_d_id -> Int8,
+        o_w_id -> Int8,
+        o_c_id -> Int8,
         o_entry_d -> Timestamp,
-        o_carrier_id -> Nullable<Int4>,
-        o_ol_cnt -> Int4,
-        o_all_local -> Int4,
+        o_carrier_id -> Nullable<Int8>,
+        o_ol_cnt -> Int8,
+        o_all_local -> Int8,
     }
 }
 
 diesel::table! {
     stocks (s_w_id, s_i_id) {
-        s_i_id -> Int4,
-        s_w_id -> Int4,
-        s_quantity -> Int4,
+        s_i_id -> Int8,
+        s_w_id -> Int8,
+        s_quantity -> Int8,
         s_dist_01 -> Text,
         s_dist_02 -> Text,
         s_dist_03 -> Text,
@@ -117,16 +117,16 @@ diesel::table! {
         s_dist_08 -> Text,
         s_dist_09 -> Text,
         s_dist_10 -> Text,
-        s_ytd -> Int4,
-        s_order_cnt -> Int4,
-        s_remote_cnt -> Int4,
+        s_ytd -> Int8,
+        s_order_cnt -> Int8,
+        s_remote_cnt -> Int8,
         s_data -> Text,
     }
 }
 
 diesel::table! {
     warehouses (w_id) {
-        w_id -> Int4,
+        w_id -> Int8,
         w_name -> Text,
         w_street_1 -> Text,
         w_street_2 -> Text,
