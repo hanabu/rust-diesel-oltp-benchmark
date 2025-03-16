@@ -5,7 +5,7 @@
 - ap-northeast-1 Tokyo region
 - SUT : AWS Lambda Arm64, 1792MB, AmazonLinux 2023 runtime
 - RTE : Scale factor=1
-- AWS RDS PostgreSQL : t4g.micro, EBS gp3 20GiB, PostgreSQL 17.2
+- AWS RDS PostgreSQL : t4g.micro(2vCPU, 1GiB RAM), EBS gp3 20GiB, PostgreSQL 17.2
 
 concurrency=1
 
@@ -45,29 +45,29 @@ customer_by_name:    639,  0.015587,  0.001555,  0.001032,  0.000699
 concurrency=1
 
 ```
-413.0 tpm  ( 413 new_order transactions in 60.000 secs )
+334.0 tpm  ( 334 new_order transactions in 60.000 secs )
 ##                calls , e2e total,  begin   ,  query   ,  commit
 ##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
-new_order:           470,  0.076005,  0.003440,  0.060015,  0.002034
-payment:             470,  0.029552,  0.002326,  0.014776,  0.001919
-order_status:         43,  0.025726,  0.002287,  0.011419,  0.001019
-delivery:             42,  0.126120,  0.002491,  0.111276,  0.002052
-stock_level:         420,  0.020154,  0.002314,  0.006392,  0.001016
-customer_by_name:    309,  0.017979,  0.002418,  0.003916,  0.001117
+new_order:           374,  0.099847,  0.002879,  0.080496,  0.002624
+payment:             373,  0.034310,  0.003400,  0.018037,  0.002022
+order_status:         34,  0.037226,  0.002556,  0.021379,  0.001258
+delivery:             34,  0.155734,  0.002674,  0.139848,  0.002377
+stock_level:         330,  0.023810,  0.002628,  0.009498,  0.001168
+customer_by_name:    262,  0.020916,  0.002680,  0.005989,  0.001241
 ```
 
 concurrency=2
 
 ```
-554.0 tpm  ( 554 new_order transactions in 60.000 secs )
+608.0 tpm  ( 608 new_order transactions in 60.000 secs )
 ##                calls , e2e total,  begin   ,  query   ,  commit
 ##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
-new_order:           650,  0.115629,  0.003708,  0.098815,  0.002687
-payment:             650,  0.043158,  0.003670,  0.026656,  0.002576
-order_status:         60,  0.024390,  0.003873,  0.008565,  0.001764
-delivery:             58,  0.226177,  0.003530,  0.209703,  0.002611
-stock_level:         580,  0.024238,  0.003829,  0.008241,  0.001794
-customer_by_name:    427,  0.019205,  0.003642,  0.003453,  0.001736
+new_order:           721,  0.103800,  0.003303,  0.087593,  0.002536
+payment:             720,  0.039356,  0.003270,  0.023705,  0.002392
+order_status:         65,  0.022078,  0.003169,  0.007387,  0.001502
+delivery:             65,  0.198146,  0.003166,  0.182605,  0.002382
+stock_level:         650,  0.022580,  0.003353,  0.007599,  0.001622
+customer_by_name:    451,  0.017513,  0.003288,  0.002536,  0.001571
 ```
 
 ## CockroachDB serverless
