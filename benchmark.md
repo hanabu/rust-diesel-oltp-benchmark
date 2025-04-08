@@ -106,3 +106,53 @@ delivery:             15,  1.395790,  0.002872,  1.366557,  0.014695
 stock_level:         150,  0.037370,  0.003047,  0.021291,  0.001498
 customer_by_name:    111,  0.021215,  0.003017,  0.005252,  0.001470
 ```
+
+## SQLite on AWS EC2 EBS
+
+t4g.micro, gp3, oregon
+
+concurrency=1
+
+```
+3545.0 tpm  ( 3545 new_order transactions in 60.000 secs )
+
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:          4120,  0.007941,  0.000056,  0.001834,  0.005762
+payment:            4120,  0.005753,  0.000055,  0.000610,  0.004815
+order_status:        375,  0.000695,  0.000031,  0.000406,  0.000037
+delivery:            374,  0.015478,  0.000056,  0.005054,  0.010086
+stock_level:        3740,  0.001154,  0.000028,  0.000883,  0.000047
+customer_by_name:   2715,  0.001173,  0.000033,  0.000831,  0.000051
+```
+
+concurrency=2
+
+```
+3473.0 tpm  ( 3473 new_order transactions in 60.000 secs )
+
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:          4070,  0.014928,  0.006731,  0.002042,  0.005864
+payment:            4070,  0.010921,  0.005055,  0.000675,  0.004912
+order_status:        370,  0.000782,  0.000031,  0.000477,  0.000045
+delivery:            370,  0.012089,  0.001429,  0.002528,  0.007852
+stock_level:        3690,  0.006913,  0.000044,  0.006576,  0.000076
+customer_by_name:   2676,  0.001689,  0.000037,  0.001314,  0.000063
+```
+
+concurrency=3
+
+```
+3462.0 tpm  ( 3462 new_order transactions in 60.000 secs )
+
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:          4038,  0.021110,  0.012825,  0.002110,  0.005887
+payment:            4037,  0.019462,  0.013466,  0.000696,  0.005028
+order_status:        368,  0.002429,  0.000031,  0.002108,  0.000060
+delivery:            366,  0.014725,  0.004032,  0.002549,  0.007858
+stock_level:        3660,  0.009685,  0.000043,  0.009342,  0.000081
+customer_by_name:   2660,  0.001698,  0.000034,  0.001334,  0.000065
+```
+
