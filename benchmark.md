@@ -1,5 +1,39 @@
 # Benchmark results
 
+## SQLite on EFS one zone
+
+- ap-northeast-1 Tokyo region
+- SUT : AWS Lambda Arm64, 1792MB, AmazonLinux 2023 runtime
+- RTE : Scale factor=1
+
+concurrency=1
+
+```
+220.0 tpm  ( 220 new_order transactions in 60.000 secs )
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:           252,  0.112680,  0.016763,  0.032799,  0.047440
+payment:             252,  0.073684,  0.016223,  0.005195,  0.036628
+order_status:         23,  0.044334,  0.000036,  0.026400,  0.002901
+delivery:             23,  0.259329,  0.017222,  0.089148,  0.138034
+stock_level:         220,  0.046042,  0.000037,  0.028021,  0.002990
+customer_by_name:    163,  0.036475,  0.000038,  0.017906,  0.003150
+```
+
+concurrency=2
+
+```
+90.0 tpm  ( 90 new_order transactions in 60.000 secs )
+##                calls , e2e total,  begin   ,  query   ,  commit
+##             ( counts ) (sec/call) (sec/call) (sec/call) (sec/call)
+new_order:           110,  0.411410,  0.157407,  0.156791,  0.077164
+payment:             110,  0.351931,  0.177957,  0.028139,  0.130443
+order_status:         10,  0.105034,  0.000037,  0.086015,  0.003274
+delivery:             10,  1.215236,  0.271560,  0.789010,  0.138446
+stock_level:         100,  0.377463,  0.000038,  0.358737,  0.003403
+customer_by_name:     74,  0.109154,  0.000038,  0.088428,  0.004883
+```
+
 ## AWS RDS PostgreSQL
 
 - ap-northeast-1 Tokyo region
@@ -109,7 +143,9 @@ customer_by_name:    111,  0.021215,  0.003017,  0.005252,  0.001470
 
 ## SQLite on AWS EC2 EBS
 
-t4g.micro, gp3, oregon
+- us-west-2 Oregon region
+- SUT : AWS EC2 t4g.micro, EBS gp3 8GiB, AmazonLinux 2023 runtime
+- RTE : Scale factor=1
 
 concurrency=1
 
